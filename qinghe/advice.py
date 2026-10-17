@@ -59,7 +59,7 @@ def _text_for(level: str, precip: float, soil_pct, water_mm, eff_lower) -> str:
 
 
 def build_calendar(daily_forecast, water_mm=None, soil_pct=None, thresholds=None,
-                   dynamic=None, today=None) -> list:
+                   dynamic=None, today=None, has_telemetry=True) -> list:
     """生成逐日灌溉建议。
 
     参数:
@@ -69,6 +69,7 @@ def build_calendar(daily_forecast, water_mm=None, soil_pct=None, thresholds=None
         thresholds:     `{'waterlevel_down', 'humi_down', ...}`，缺省取系统默认
         dynamic:        `irrigation.compute_dynamic_threshold()` 的结果，缺省重算
         today:          起始日期（`datetime.date`），缺省今天
+        has_telemetry:  是否已收到本地块遥测；为 False 时不给灌溉结论（无数据不谈灌溉）
     返回:
         `[{'date','weekday','precip','level','label','text','has_forecast'}]`
     """
@@ -86,7 +87,13 @@ def build_calendar(daily_forecast, water_mm=None, soil_pct=None, thresholds=None
     calendar = []
     for index in range(min(days, 7)):
         precip = precips[index] if index < len(precips) else 0.0
-        level = _level_for(precip, soil_pct, eff_lower, water_mm, wl_down)
+        if has_telemetry:
+            level = _level_for(precip, soil_pct, eff_lower, water_mm, wl_down)
+            text = _text_for(level, precip, soil_pct, water_mm, eff_lower)
+        else:
+            # 没有本地块读数时不给「需要灌溉/可等雨」结论，避免 0 值被当成真实墒情
+            level = 'watch'
+            text = '尚未收到该地块遥测，先按现有安排观察，设备上报后再判断。'
         day = start + datetime.timedelta(days=index)
         calendar.append({
             'date': day.isoformat(),
@@ -94,13 +101,13 @@ def build_calendar(daily_forecast, water_mm=None, soil_pct=None, thresholds=None
             'precip': round(precip, 1),
             'level': level,
             'label': LEVEL_LABELS[level],
-            'text': _text_for(level, precip, soil_pct, water_mm, eff_lower),
+            'text': text,
             'has_forecast': has_forecast and index < len(precips),
         })
     return calendar
 
 
-def summarize(calendar, dynamic=None, has_forecast=True) -> str:
+def summarize(calendar, dynamic=None, has_forecast=True, has_telemetry=True) -> str:
     """把逐日建议压成一句话总览（前端卡片副标题）。"""
     if not calendar:
         return '暂无建议'
@@ -113,11 +120,13 @@ def summarize(calendar, dynamic=None, has_forecast=True) -> str:
     parts = []
     if p6d is not None:
         parts.append('6 日加权降雨 %.1f mm' % float(p6d))
+    if not has_telemetry:
+        parts.append('尚未收到本地块遥测，建议先确认设备在线')
     if rain:
         parts.append('%d 天可等雨' % rain)
     if need:
         parts.append('%d 天建议灌溉' % need)
-    if not need and not rain:
+    if has_telemetry and not need and not rain:
         parts.append('未来一周按当前阈值维持即可')
     if not has_forecast:
         parts.append('（未配置天气 Key，建议只按当前墒情参考）')

@@ -82,6 +82,19 @@ def test_summarize_counts_and_forecast_state():
     assert '天气' in text
 
 
+def test_no_telemetry_never_concludes_irrigation():
+    """没有本地块遥测时不能把默认 0 值当成墒情去说「需要灌溉」。"""
+    days = advice.build_calendar(
+        [0.0], water_mm=0.0, soil_pct=0.0, has_telemetry=False,
+    )
+    assert all(day['level'] == 'watch' for day in days)
+    assert '遥测' in days[0]['text']
+    text = advice.summarize(days, {'P6d': 0.0}, False, has_telemetry=False)
+    assert '尚未收到' in text
+    assert '灌溉' not in text
+    assert '维持即可' not in text
+
+
 def test_api_summary_mentions_oxygen_risk(logged_in):
     """RORI 高时总览必须提示增氧，避免与红色缺氧预警自相矛盾。"""
     from qinghe import planner
@@ -144,6 +157,22 @@ def test_api_uses_live_telemetry(logged_in):
     assert body['water_mm'] is not None
     assert body['soil_pct'] is not None
     assert 0 <= body['rori'] <= 100
+
+
+def test_api_without_telemetry_reports_unknown(logged_in):
+    """新用户没有任何遥测：接口应说「不知道」，而不是按 0% 墒情建议灌溉。"""
+    from qinghe import planner
+
+    with logged_in.session_transaction() as sess:
+        uid = sess['user_id']
+    planner.reset_telemetry(uid)
+    body = logged_in.get('/api/advice/calendar').get_json()
+    assert body['has_telemetry'] is False
+    assert body['water_mm'] is None
+    assert body['soil_pct'] is None
+    assert body['rori'] is None
+    assert all(day['level'] == 'watch' for day in body['days'])
+    assert '灌溉' not in body['summary']
 
 
 def test_api_marks_forecast_present(logged_in, monkeypatch):

@@ -23,6 +23,9 @@ def api_advice_calendar():
 
     precips = planner.forecast_precips(uid) or []
     ctx = planner.build_context(uid, precips=precips)
+    # 无遥测时 build_context 给的是安全默认值（water/soil 为 0），直接拿来判建议会
+    # 得出「土壤 0% 需要灌溉」的假结论，所以把有没有数据一并传下去。
+    has_telemetry = bool(ctx.get('has_telemetry'))
 
     thresh_row = db.load_thresholds(uid)
     thresh = dict(thresh_row) if thresh_row is not None else {}
@@ -34,15 +37,16 @@ def api_advice_calendar():
     }
     calendar = advice.build_calendar(
         precips,
-        water_mm=ctx.get('water_mm'),
-        soil_pct=ctx.get('soil_pct'),
+        water_mm=ctx.get('water_mm') if has_telemetry else None,
+        soil_pct=ctx.get('soil_pct') if has_telemetry else None,
         thresholds=thresh,
         dynamic=dynamic,
+        has_telemetry=has_telemetry,
     )
-    summary = advice.summarize(calendar, dynamic, bool(precips))
+    summary = advice.summarize(calendar, dynamic, bool(precips), has_telemetry)
     # 灌水建议只看墒情与水情，但根区缺氧是独立风险：RORI 偏高时要单独提示增氧，
     # 否则会出现「RORI 76 重度厌氧」却写「正常维持」的自相矛盾。
-    rori = ctx.get('rori')
+    rori = ctx.get('rori') if has_telemetry else None
     try:
         rori_value = float(rori) if rori is not None else None
     except (TypeError, ValueError):
@@ -54,8 +58,9 @@ def api_advice_calendar():
     return jsonify({
         'status': 'success',
         'has_forecast': bool(precips),
-        'water_mm': ctx.get('water_mm'),
-        'soil_pct': ctx.get('soil_pct'),
+        'has_telemetry': has_telemetry,
+        'water_mm': ctx.get('water_mm') if has_telemetry else None,
+        'soil_pct': ctx.get('soil_pct') if has_telemetry else None,
         'rori': ctx.get('rori'),
         'rori_level': ctx.get('rori_level'),
         'p6d': ctx.get('p6d'),
