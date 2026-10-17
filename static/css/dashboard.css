@@ -79,6 +79,12 @@
 .trend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .trend-title { font-size: 12px; color: #7A8A80; font-weight: 600; margin-bottom: 4px; }
 .trend-sub-title { font-size: 12px; color: #7A8A80; font-weight: 600; margin-top: 18px; margin-bottom: 4px; }
+/* RORI 二维近似值说明：诚实性提示，弱化但可读，不用醒目告警色 */
+.rori-approx-note {
+    margin: 8px 0 0; padding: 7px 10px;
+    font-size: 12px; line-height: 1.5; color: #8A6D3B;
+    background: #FDF6E7; border-left: 3px solid #E8A33D; border-radius: 4px;
+}
 
 /* 窄屏：趋势图单列 */
 @media (max-width: 900px) {

@@ -84,7 +84,22 @@
                     }]
                 },
                 options: Object.assign({}, common, {
-                    scales: { y: { min: 0, max: 100, title: { display: true, text: '指数' } } }
+                    scales: { y: { min: 0, max: 100, title: { display: true, text: '指数' } } },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                // 二维近似点明确标注，避免把近似值误读为四维真实值
+                                label: function (ctx) {
+                                    var flags = (ctx.dataset && ctx.dataset._approxFlags) || [];
+                                    var base = 'RORI ' + ctx.formattedValue;
+                                    return flags[ctx.dataIndex]
+                                        ? base + '（二维近似值：该时刻无溶解氧/氧化还原电位数据）'
+                                        : base;
+                                }
+                            }
+                        }
+                    }
                 })
             });
         }
@@ -131,13 +146,67 @@
 
         S.roriChart.data.labels = axisLabels(sr);
         S.roriChart.data.datasets[0].data = sr.map(function (d) { return d.rori; });
+        // 诚实性标注：把"该点是否为二维近似"随点带给 tooltip，
+        // 不因为图好看而把近似值当四维真值展示。
+        S.roriChart.data.datasets[0]._approxFlags = sr.map(function (d) { return !!d.approx; });
         S.roriChart.update('none');
+        updateRoriApproxNote(sr);
 
         S.chartDirty = false;
     }
 
+    /**
+     * 历史行 -> RORI 趋势点（纯函数，便于 node 单测）。
+     *
+     * 与实时 RORI 使用同一套四维算法；`do_mgl` / `eh_mv` 在 D-01 迁移前的
+     * 早期数据里为 null，此时回退 0 并标记 `approx: true`（二维近似值）。
+     *
+     * 注意用 `Number.isFinite` 而非 `|| 0`：0 是合法的 DO/Eh 边界值，
+     * 用 `||` 会把真实的 0 一并吞掉。
+     *
+     * @param {Object} h /api/history 的一行
+     * @param {Function} computeRori 四维 RORI 计算函数
+     * @returns {{ts: number, rori: number, approx: boolean}}
+     */
+    function historyRowToRoriPoint(h, computeRori) {
+        var hasDo = Number.isFinite(h.do_mgl);
+        var hasEh = Number.isFinite(h.eh_mv);
+        return {
+            ts: h.ts,
+            rori: computeRori(
+                h.water_adc,
+                h.soil_adc,
+                hasDo ? h.do_mgl : 0,
+                hasEh ? h.eh_mv : 0
+            ),
+            // 任一缺失即视为二维近似，供 tooltip 与图下说明使用
+            approx: !(hasDo && hasEh)
+        };
+    }
+
     /** 标记图表需要重绘，由统一 tick 合并到 2s 一次 */
     function markChartDirty() { S.chartDirty = true; }
+
+    /**
+     * 在 RORI 图下方显示"二维近似"说明。
+     * 只要采样点里存在无 do/eh 的旧数据就提示，全部为四维时隐藏。
+     * @param {Array} sr 采样后的 RORI 趋势点（含 approx 标记）
+     */
+    function updateRoriApproxNote(sr) {
+        var el = QH.$('roriApproxNote');
+        if (!el) return;
+        var approxCount = 0;
+        for (var i = 0; i < sr.length; i++) if (sr[i].approx) approxCount++;
+        if (!approxCount) {
+            el.textContent = '';
+            el.hidden = true;
+            return;
+        }
+        el.hidden = false;
+        el.textContent = '说明：图中 ' + approxCount + ' 个点为二维近似值'
+            + '（该时段无溶解氧/氧化还原电位数据，仅按水位与土壤计算），'
+            + '与实时四维 RORI 不完全等价。';
+    }
 
     /** 追加一个趋势点（超上限 shift 弹出，不整数组重建） */
     function pushChartPoint() {
@@ -152,7 +221,8 @@
             water: parseFloat(S.currentWaterLevel) || 0,
             soil: parseFloat(S.currentSoilMoisture) || 0
         });
-        S.roriTrendData.push({ ts: now, rori: rori });
+        // 实时点是四维真值（水位/土壤/溶解氧/氧化还原电位齐全），非近似
+        S.roriTrendData.push({ ts: now, rori: rori, approx: false });
         // 硬上限：超限弹出最旧点（O(1)），而不是过滤重建整个数组
         while (S.trendData.length > QH_STORE.LIMITS.TREND_MAX_POINTS) S.trendData.shift();
         while (S.roriTrendData.length > QH_STORE.LIMITS.TREND_MAX_POINTS) S.roriTrendData.shift();
@@ -194,9 +264,9 @@
                     soil: Math.max(0, Math.min(Math.round((4095 - h.soil_adc) / 4095 * 100), 100))
                 };
             });
-            // RORI 趋势从历史 ADC 计算
+            // RORI 趋势从历史 ADC 计算（四维，与实时算法对齐）
             S.roriTrendData = sampled.map(function (h) {
-                return { ts: h.ts, rori: root.computeRori(h.water_adc, h.soil_adc) };
+                return historyRowToRoriPoint(h, root.computeRori);
             });
             QH_STORE.saveTrendStoreNow(S.trendData, S.roriTrendData);
             S.chartDirty = true;
@@ -211,6 +281,12 @@
         pushChartPoint: pushChartPoint,
         toggleChartType: toggleChartType,
         loadHistory: loadHistory,
+        historyRowToRoriPoint: historyRowToRoriPoint,
         CHART_LIMIT: CHART_LIMIT
     };
+
+    // node 单测出口：浏览器下无 module，静默跳过
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = { historyRowToRoriPoint: historyRowToRoriPoint };
+    }
 })(typeof globalThis !== 'undefined' ? globalThis : this);
