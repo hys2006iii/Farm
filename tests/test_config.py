@@ -163,6 +163,32 @@ def test_save_config_does_not_reconnect_without_full_credentials(client, uid):
     assert iot.mqtt_clients == {}
 
 
+def test_save_config_does_not_block_on_slow_broker(client, uid, monkeypatch):
+    """华为云不可达（connect 阻塞）时，save_config 必须立刻返回。"""
+    import threading
+    import time
+
+    from qinghe import iot
+
+    started = threading.Event()
+    release = threading.Event()
+
+    def slow_connect(user_id):
+        started.set()
+        release.wait(3)
+        return True
+
+    monkeypatch.setattr(iot, 'connect_huawei_iot', slow_connect)
+    begin = time.time()
+    resp = client.post('/api/save_config', json={'farm_name': '慢连接农场'})
+    elapsed = time.time() - begin
+    assert resp.get_json()['status'] == 'success'
+    assert elapsed < 1.0, '配置保存被 MQTT 连接阻塞'
+    # 后台线程确实被启动了（连接在另一个线程里进行）
+    assert started.wait(2)
+    release.set()
+
+
 # ============================================================
 # /api/thresh_settings
 # ============================================================

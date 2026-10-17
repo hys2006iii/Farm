@@ -12,6 +12,27 @@ from qinghe import config, db, iot, irrigation
 bp = Blueprint('config_api', __name__)
 
 
+def _reconnect_async(uid):
+    """在后台守护线程里重建 MQTT 连接。
+
+    `iot.connect_huawei_iot()` 内部的 `client.connect()` 超时可达 60 秒，
+    同步执行会把 HTTP 请求线程一起卡死（华为云不可达时尤其明显）。这里改成
+    异步：接口立即返回，连接结果由 SocketIO 的 `device_status` 事件推给前端。
+    """
+    import threading
+
+    try:
+        thread = threading.Thread(
+            target=iot.connect_huawei_iot,
+            args=(uid,),
+            name='iot-reconnect-%s' % uid,
+            daemon=True,
+        )
+        thread.start()
+    except Exception:  # noqa: BLE001 - 线程起不来也不能影响配置保存结果
+        pass
+
+
 def _to_int(value, default=None):
     """宽松转 int：接受 int/float/数字字符串，其它返回 default。"""
     if value is None or isinstance(value, bool):
@@ -74,7 +95,8 @@ def api_save_config():
     values['iot_port'] = port
 
     db.save_config(uid, values)
-    iot.connect_huawei_iot(uid)
+    # 异步重连：避免 connect() 的 60s 超时阻塞请求线程
+    _reconnect_async(uid)
     return jsonify({'status': 'success', 'message': '配置已更新'})
 
 
