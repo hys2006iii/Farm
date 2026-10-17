@@ -39,6 +39,22 @@
 新增 HTTP 接口 13 个（预案 4、指标 1、自动调控 1、告警 2、日志 1、设备状态 1、导出 2、告警推送 1），
 接口明细见 [`docs/20_概要设计说明书.md`](docs/20_概要设计说明书.md) 4.2 节。
 
+### 3. 第二轮新增（多地块、AI 快照、知识库与无硬件自测）
+
+| 编号 | 功能 | 要点 |
+| --- | --- | --- |
+| F1 | 多地块管理 | 一个账号管多块地；登录时选地块、看板顶栏随时切换；`/api/farms` 增删改查 + 切换即清空旧地块遥测 |
+| F2 | 地图选点 / 圈地 | 系统设置内置地图，点图取经纬度、逐点圈出田块边界并估算面积；底图用高德卫星影像，瓦片不可达时降级手填 |
+| F3 | AI 实时快照 | 每次提问自动附带服务端快照（四路读数、RORI、阈值、近 40 条趋势、6 日雨情），无数据时明写「暂无」不编造 |
+| F4 | 七日灌溉建议 | 逐日给出「灌溉 / 等雨 / 观察 / 维持」，概览卡与看板联动；RORI 偏高时并给增氧提示 |
+| F5 | 知识库页面 | `GET /knowledge`：灌溉基础、DO/Eh 氧环境、怎么看天看地、系统内核、操作问答五章 |
+| F6 | 设备模拟与自测 | `tools/simulate_device.py` 灌数（normal/drought/anaerobic/storm 四场景）；`tools/selftest_no_hardware.py` 12 项自检，无实物主板也能验收 |
+| F7 | 遥测快照恢复 | `GET /api/telemetry`：刷新页面/切回前台时补一帧服务端最新遥测，不再出现「读数空白但图表有数据」 |
+
+第二批新增 9 个路径（`/api/farms` ×5、`/api/advice/calendar`、`/api/dev/*` ×2、`/api/telemetry`、`/knowledge`），
+`/api/dev/*` 需以 `FARM_DEV_SIM=1` 启动才开放，生产环境默认关闭（404）。
+
+
 ---
 
 ## 二、系统架构
@@ -49,10 +65,11 @@
         ▼                        ▼
 ┌───────────────────────────────────────────────┐
 │ Flask 应用（waitress 生产承载，多线程）        │
-│  qinghe/routes/*  蓝图层（8 个蓝图）           │
+│  qinghe/routes/*  蓝图层（11 个蓝图）          │
 │  qinghe/{auth,iot,irrigation,alerts,weather,ai}│
 │  qinghe/{alert_center,logbook,heartbeat,       │
 │          planner,metrics,autocontrol} 新模块   │
+│  qinghe/{farm,advice,simulate} 地块/建议/模拟  │
 │  qinghe/db.py  SQLite（WAL、参数化、连接池化） │
 └───────────────────────────────────────────────┘
         │ MQTT（paho-mqtt 后台线程）
@@ -63,8 +80,8 @@ ESP32-E 节点（D7/D9 水泵、D5 气泵 PWM、A0 水位、A2 土壤、A4 DO、
 ```
 
 - 后端按模块拆包，`app.py` 只剩装配入口（约 20 行）。
-- 前端拆分为 `static/js/{core,store,charts,irrigation,config,ai,weather,realtime,insight,app}.js`
-  与 `static/css/{base,dashboard,login,modal,insight}.css`，`templates/index.html` 从 1616 行降到 339 行。
+- 前端拆分为 `static/js/{core,store,charts,irrigation,config,ai,weather,realtime,insight,advice,farm,app}.js`
+  与 `static/css/{base,dashboard,login,modal,insight,knowledge}.css`，`templates/index.html` 从 1616 行降到约 560 行。
 - 遥测回调线程内做「心跳 → 上下文 → 泵时长 → 自动调控 → 告警判定」旁路，每个子系统独立 try/except，
   任一失败不影响主链路落库与推送。
 
@@ -96,6 +113,8 @@ python tools/gen_secret.py          # 生成随机密钥，写入 .env 提示值
 | `HOST` | `0.0.0.0` | 监听地址 |
 | `FARM_DEBUG` | `0` | 生产必须为 `0` |
 | `FARM_THREADS` | `8` | waitress 工作线程数 |
+| `FARM_DEV_SIM` | `0` | 设为 `1` 才开放 `/api/dev/*` 设备模拟接口（演示/自测用，生产保持 `0`） |
+| `FARM_TRUST_PROXY` | `0` | 置 `1` 才信任 `X-Forwarded-For`（仅在反向代理后使用） |
 
 ### 3. 开发模式运行
 
@@ -119,14 +138,26 @@ python server.py                    # 或 start_server.bat
 ## 四、测试
 
 ```bash
-python -m pytest tests -q           # Python 侧全量
-npm run test:js                     # 前端纯函数（node --test，需 Node 18+）
+python -m pytest tests -q           # Python 侧全量（当前 770 passed）
+npm run test:js                     # 前端纯函数（node --test，需 Node 18+，当前 82 passed）
 ```
 
 - Python 用例覆盖：鉴权与限流、配置读写、遥测解析与落库、RORI 与动态阈值、告警判定与推送、
-  预案状态机、自动调控、指标核算、CSV 导出、SocketIO 事件、部署脚本静态检查。
-- 前端用例抽出纯函数（`computeRori`、分级、动态阈值、仪表盘格式化等）做无浏览器测试。
+  预案状态机、自动调控、指标核算、CSV 导出、SocketIO 事件、多地块、七日建议、设备模拟、
+  AI 快照、知识库页面、部署脚本静态检查。
+- 前端用例抽出纯函数（`computeRori`、分级、动态阈值、圈地面积与格式等）做无浏览器测试。
 - 交付验收命令（AGENTS.md）：`python -m pytest tests -q` 必须全绿。
+
+### 没有实物主板时怎么验
+
+```bash
+python tools/selftest_no_hardware.py -v            # 12 项端到端自检（临时库，不用起服务）
+python tools/simulate_device.py --list             # 四类演示场景：normal/drought/anaerobic/storm
+python tools/simulate_device.py --scenario anaerobic --samples 48
+```
+
+`simulate_device.py` 通过 HTTP 往运行中的服务灌数据，需服务端以 `FARM_DEV_SIM=1` 启动；
+`selftest_no_hardware.py` 自带 Flask 测试客户端，注册→上报→落库→告警→导出→多地块全链路跑一遍。
 
 ---
 
@@ -152,13 +183,15 @@ Farm/
 │  ├─ planner.py          # NF4 AI 决策预案
 │  ├─ metrics.py          # NF5 节水减碳核算
 │  ├─ autocontrol.py      # NF6 自动调控
+│  ├─ advice.py           # 七日灌溉建议（纯函数）
+│  ├─ simulate.py         # 四场景遥测生成与回放
 │  ├─ realtime.py         # SocketIO 事件与设备状态推送
-│  └─ routes/             # 8 个蓝图：app/auth/config/data/ai/insight/export/monitor
-├─ templates/             # index.html / login.html
+│  └─ routes/             # 11 个蓝图：app/auth/config/data/ai/insight/export/monitor/farm/advice/dev
+├─ templates/             # index.html / login.html / knowledge.html
 ├─ static/                # css/ + js/ 前端资源
 ├─ tests/                 # pytest 用例 + js/ 前端用例
 ├─ docs/                  # 设计文档与交付材料
-├─ tools/                 # gen_secret.py 等辅助脚本
+├─ tools/                 # gen_secret.py / simulate_device.py / selftest_no_hardware.py
 └─ *.bat                  # run/start_server/stop_server/firewall_allow 运维脚本
 ```
 
