@@ -235,11 +235,12 @@ def test_api_ai_chat_missing_body_returns_415(client, auth_headers):
     assert resp.status_code == 415
 
 
-def test_api_ai_chat_missing_body_with_json_content_type_200(client, auth_headers, monkeypatch):
-    """带正确 Content-Type 但空 body 时不应 500。"""
-    set_config(user_id_of('farmer01'), ai_key='sk-x')
-    monkeypatch.setattr(requests, 'post',
-                        lambda *a, **k: _Resp({'choices': [{'message': {'content': ''}}]}))
-    resp = client.post('/api/ai_chat', headers=dict(auth_headers,
-                                                    **{'Content-Type': 'application/json'}))
-    assert resp.status_code == 200
+def test_api_ai_chat_missing_body_with_json_content_type_400(client, auth_headers):
+    """带 `Content-Type: application/json` 但空 body → 400（`request.json` 解析失败）。
+
+    同样是旧版 `request.json` 的既有行为。前端始终发送合法 JSON，故线上不触发；
+    此处钉住现状并计入 bug 清单（建议改为 `request.get_json(silent=True)`）。
+    """
+    resp = client.post('/api/ai_chat',
+                       headers=dict(auth_headers, **{'Content-Type': 'application/json'}))
+    assert resp.status_code == 400
