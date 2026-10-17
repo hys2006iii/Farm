@@ -4,82 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>青禾智灌</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root {
-            --bg: #F0F4EF;
-            --card: #FFFFFF;
-            --card-border: #E3E9E2;
-            --primary: #1F6B45;
-            --primary-dark: #174D32;
-            --primary-light: #E7F3EB;
-            --accent: #2E7D8C;
-            --text: #23332B;
-            --text-sub: #6B7A72;
-            --border: #E3E9E2;
-            --shadow: 0 2px 10px rgba(31, 60, 43, 0.08);
-            --shadow-hover: 0 6px 20px rgba(31, 60, 43, 0.14);
-            --radius: 14px;
-        }
-        html, body { height: 100%; }
-        body {
-            font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
-            background: linear-gradient(160deg, #F0F4EF 0%, #E8F0E8 60%, #E2ECE6 100%);
-            color: var(--text);
-            display: flex; flex-direction: column;
-            min-height: 100vh;
-        }
-        .topbar {
-            background: rgba(23, 48, 36, 0.92);
-            backdrop-filter: blur(8px);
-            color: #D6E8D8;
-            padding: 10px 28px;
-            display: flex; align-items: center; gap: 12px;
-            font-size: 13px; user-select: none;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
-        }
-        .topbar-logo { font-size: 20px; font-weight: 800; color: #E8F5EA; letter-spacing: 2px; }
-        .topbar-title { font-size: 13px; font-weight: 600; color: #C9E0CD; opacity: 0.9; }
-        .login-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px 20px; }
-        .login-card {
-            width: 400px;
-            background: var(--card);
-            border: 1px solid var(--card-border);
-            border-radius: var(--radius);
-            padding: 36px 32px 30px;
-            box-shadow: var(--shadow);
-            transition: box-shadow 0.2s, transform 0.2s;
-        }
-        .login-card:hover { box-shadow: var(--shadow-hover); }
-        .sys-title { font-size: 24px; font-weight: 800; color: var(--primary-dark); text-align: center; letter-spacing: 1px; margin-top: 4px; }
-        .sys-sub { font-size: 13px; color: var(--text-sub); text-align: center; margin: 8px 0 26px; }
-        .input-row { margin-bottom: 18px; }
-        .input-row label { display: block; font-size: 13px; font-weight: 600; color: #55665C; margin-bottom: 6px; }
-        .input-row input {
-            width: 100%; padding: 11px 14px;
-            border: 1px solid #DDE4DF; border-radius: 10px;
-            font-size: 14px; background: #F6F9F6; color: var(--text);
-            transition: border-color 0.15s, box-shadow 0.15s;
-        }
-        .input-row input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(31,107,69,0.12); }
-        .login-btn {
-            width: 100%; padding: 12px;
-            background: linear-gradient(90deg, var(--primary), #2A7D50);
-            color: #F0F7F1; border: none; border-radius: 10px;
-            font-size: 15px; font-weight: 700; cursor: pointer;
-            transition: filter 0.15s, transform 0.1s, box-shadow 0.15s;
-            box-shadow: 0 3px 10px rgba(31, 107, 69, 0.25);
-        }
-        .login-btn:hover { filter: brightness(1.08); box-shadow: 0 5px 16px rgba(31, 107, 69, 0.32); }
-        .login-btn:active { transform: scale(0.98); }
-        .login-extra { margin-top: 18px; text-align: center; }
-        .login-extra a { color: var(--primary); font-size: 13px; text-decoration: none; font-weight: 600; }
-        .login-extra a:hover { text-decoration: underline; }
-        .footer { background: rgba(23,48,36,0.9); color: #90A896; text-align: center; padding: 14px 24px; font-size: 12px; }
-        @media (max-width: 480px) {
-            .login-card { width: 100%; padding: 28px 22px; }
-        }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
 </head>
 <body>
 
@@ -102,7 +27,7 @@
             <input type="password" id="loginPassword" placeholder="请输入密码" onkeydown="if(event.key==='Enter') handleLogin();">
         </div>
 
-        <button class="login-btn" onclick="handleLogin()">登 录</button>
+        <button class="login-btn" id="loginBtn" onclick="handleLogin()">登 录</button>
 
         <div class="login-extra">
             <a href="javascript:void(0)" onclick="switchPanel('register')">注册新账号</a>
@@ -126,7 +51,7 @@
             <input type="password" id="regConfirmPassword" placeholder="再次输入密码">
         </div>
 
-        <button class="login-btn" onclick="handleRegister()">注 册</button>
+        <button class="login-btn" id="registerBtn" onclick="handleRegister()">注 册</button>
 
         <div class="login-extra">
             <a href="javascript:void(0)" onclick="switchPanel('login')">返回登录</a>
@@ -138,73 +63,6 @@
     青禾智灌 &copy; 2026
 </div>
 
-<script>
-    function switchPanel(type) {
-        var login = document.getElementById('loginPanel');
-        var register = document.getElementById('registerPanel');
-        if (type === 'register') {
-            login.style.display = 'none';
-            register.style.display = 'block';
-        } else {
-            register.style.display = 'none';
-            login.style.display = 'block';
-        }
-    }
-
-    function handleRegister() {
-        var user = document.getElementById('regUsername').value;
-        var pass = document.getElementById('regPassword').value;
-        var confirm = document.getElementById('regConfirmPassword').value;
-
-        if (!user || !pass) {
-            alert('请完整填写');
-            return;
-        }
-        if (pass !== confirm) {
-            alert('两次密码不一致');
-            return;
-        }
-
-        fetch('/api/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: user, password: pass })
-        })
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-            alert(data.message);
-            if (data.status === 'success') {
-                switchPanel('login');
-            }
-        });
-    }
-
-    function handleLogin() {
-        var user = document.getElementById('loginUsername').value;
-        var pass = document.getElementById('loginPassword').value;
-
-        if (!user || !pass) {
-            alert('请输入账号和密码');
-            return;
-        }
-
-        fetch('/api/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: user, password: pass })
-        })
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-            if (data.status === 'success') {
-                window.location.href = '/index';
-            } else {
-                alert(data.message);
-            }
-        })
-        .catch(function () {
-            alert('连接后端失败');
-        });
-    }
-</script>
+<script src="{{ url_for('static', filename='js/login.js') }}" defer></script>
 </body>
 </html>
