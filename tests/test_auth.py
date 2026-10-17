@@ -177,16 +177,63 @@ def test_login_limit_is_per_username_and_ip(client, registered):
     assert resp.status_code == 401
 
 
-def test_login_forwarded_for_is_used_as_key(flask_app):
+def test_login_ignores_forwarded_for_by_default(flask_app):
+    """默认不信任 X-Forwarded-For：轮换该头不能重置失败计数（防无限爆破）。"""
     client = flask_app.test_client()
     make_user('xffuser1', 'pw123456')
-    for _ in range(config.LOGIN_MAX_FAIL):
+    for index in range(config.LOGIN_MAX_FAIL):
         client.post('/api/login', json={'username': 'xffuser1', 'password': 'bad'},
-                    headers={'X-Forwarded-For': '1.2.3.4, 5.6.7.8'})
-    # 换一个来源 IP 立刻可以登录
+                    headers={'X-Forwarded-For': '1.2.3.%d' % index})
+    # 第 6 次即使换来源 IP、且密码正确，也必须被限流拦截
     resp = client.post('/api/login', json={'username': 'xffuser1', 'password': 'pw123456'},
                        headers={'X-Forwarded-For': '9.9.9.9'})
+    assert resp.status_code == 429
+    assert resp.get_json() == {'status': 'error', 'message': '尝试次数过多，请 10 分钟后再试'}
+
+
+def test_login_uses_forwarded_for_when_proxy_trusted(flask_app, monkeypatch):
+    """显式 FARM_TRUST_PROXY=1 时才按 XFF 第一跳区分来源。"""
+    monkeypatch.setenv('FARM_TRUST_PROXY', '1')
+    client = flask_app.test_client()
+    make_user('xffuser2', 'pw123456')
+    for _ in range(config.LOGIN_MAX_FAIL):
+        client.post('/api/login', json={'username': 'xffuser2', 'password': 'bad'},
+                    headers={'X-Forwarded-For': '1.2.3.4, 5.6.7.8'})
+    # 换一个来源 IP 可以立刻登录
+    resp = client.post('/api/login', json={'username': 'xffuser2', 'password': 'pw123456'},
+                       headers={'X-Forwarded-For': '9.9.9.9'})
     assert resp.get_json()['status'] == 'success'
+
+
+def test_login_xff_first_hop_is_used_when_trusted(flask_app, monkeypatch):
+    """信任代理时取 XFF 第一跳（最靠近客户端的地址）作为限流键。"""
+    monkeypatch.setenv('FARM_TRUST_PROXY', '1')
+    client = flask_app.test_client()
+    make_user('xffuser3', 'pw123456')
+    for _ in range(config.LOGIN_MAX_FAIL):
+        client.post('/api/login', json={'username': 'xffuser3', 'password': 'bad'},
+                    headers={'X-Forwarded-For': '1.2.3.4, 5.6.7.8'})
+    # 第一跳相同、后续跳不同 -> 仍算同一来源，被限流
+    resp = client.post('/api/login', json={'username': 'xffuser3', 'password': 'pw123456'},
+                       headers={'X-Forwarded-For': '1.2.3.4, 9.9.9.9'})
+    assert resp.status_code == 429
+
+
+def test_client_ip_uses_remote_addr_by_default(flask_app):
+    """未信任代理时 _client_ip 只取 remote_addr（伪造的 XFF 被忽略）。"""
+    client = flask_app.test_client()
+    with client.application.test_request_context(
+            '/', headers={'X-Forwarded-For': '1.2.3.4'}, environ_base={'REMOTE_ADDR': '10.0.0.7'}):
+        assert auth._client_ip() == '10.0.0.7'
+
+
+def test_client_ip_uses_xff_when_trusted(flask_app, monkeypatch):
+    """信任代理时 _client_ip 取 XFF 第一跳并去除空白。"""
+    monkeypatch.setenv('FARM_TRUST_PROXY', '1')
+    client = flask_app.test_client()
+    with client.application.test_request_context(
+            '/', headers={'X-Forwarded-For': ' 1.2.3.4 , 5.6.7.8 '}):
+        assert auth._client_ip() == '1.2.3.4'
 
 
 # ============================================================

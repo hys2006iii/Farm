@@ -24,10 +24,17 @@ _HASH_PREFIXES = ('pbkdf2:', 'scrypt:', 'sha256:')
 
 
 def _client_ip() -> str:
-    """取真实来源 IP（若有反向代理 X-Forwarded-For 则取其第一段）。"""
-    xff = request.headers.get('X-Forwarded-For', '')
-    if xff:
-        return xff.split(',')[0].strip()
+    """取用于限流的来源 IP。
+
+    **默认不信任** `X-Forwarded-For`：直连部署时该头由客户端完全控制，
+    换一个头即可重置失败计数、无限爆破密码。只有显式设置
+    `FARM_TRUST_PROXY=1`（确认服务在 nginx / waitress 反向代理之后）时，
+    才取 XFF 的第一跳（最靠近客户端的地址）。
+    """
+    if config.trust_proxy():
+        xff = request.headers.get('X-Forwarded-For', '')
+        if xff:
+            return xff.split(',')[0].strip()
     return request.remote_addr or 'unknown'
 
 
