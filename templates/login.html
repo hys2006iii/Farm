@@ -3,64 +3,109 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>青禾智灌</title>
+    <title>青禾智灌 · 登录</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
 </head>
-<body>
+<body class="login-page">
 
-<div class="topbar">
-    <span class="topbar-logo">青禾智灌</span>
-    <span class="topbar-title">智能灌溉管理平台</span>
-</div>
+<div class="login-shell">
 
-<div class="login-wrap">
-    <div class="login-card" id="loginPanel">
-        <div class="sys-title">用户登录</div>
-        <div class="sys-sub">欢迎回来，请登录你的智慧管理账户</div>
-
-        <div class="input-row">
-            <label>账号</label>
-            <input type="text" id="loginUsername" placeholder="请输入用户名">
-        </div>
-        <div class="input-row">
-            <label>密码</label>
-            <input type="password" id="loginPassword" placeholder="请输入密码" onkeydown="if(event.key==='Enter') handleLogin();">
+    <!-- 左侧：田块铭牌 + 水尺 -->
+    <aside class="brand-panel">
+        <div class="brand-head">
+            <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 21V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+                <path d="M12 12C9 12 6 10.5 6 6.5C10 6.5 12 8.5 12 12Z" fill="currentColor" opacity=".85"/>
+                <path d="M12 9C15 9 18 7.5 18 3.5C14 3.5 12 5.5 12 9Z" fill="currentColor" opacity=".55"/>
+                <path d="M5 21h14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity=".6"/>
+            </svg>
+            <div>
+                <h1 class="brand-name">青禾智灌</h1>
+                <p class="brand-en">QINGHE · SMART IRRIGATION</p>
+            </div>
         </div>
 
-        <button class="login-btn" id="loginBtn" onclick="handleLogin()">登 录</button>
-
-        <div class="login-extra">
-            <a href="javascript:void(0)" onclick="switchPanel('register')">注册新账号</a>
+        <div class="gauge" aria-hidden="true">
+            <div class="gauge-water"></div>
+            <div class="gauge-line"><span>150 mm</span></div>
+            <div class="gauge-ticks"></div>
+            <div class="gauge-labels">
+                <span>300</span><span>200</span><span>100</span><span>0</span>
+            </div>
         </div>
-    </div>
+        <p class="gauge-caption">渠道水位标尺 · 0—300 mm</p>
 
-    <div class="login-card" id="registerPanel" style="display: none;">
-        <div class="sys-title">账号注册</div>
-        <div class="sys-sub">创建你的智慧灌溉管理账户</div>
+        <p class="brand-verse">田面有水，根区有氧；<br>雨在未来六日，水在此刻一渠。</p>
 
-        <div class="input-row">
-            <label>账号</label>
-            <input type="text" id="regUsername" placeholder="设置用户名">
-        </div>
-        <div class="input-row">
-            <label>设置密码</label>
-            <input type="password" id="regPassword" placeholder="设置密码">
-        </div>
-        <div class="input-row">
-            <label>确认密码</label>
-            <input type="password" id="regConfirmPassword" placeholder="再次输入密码">
+        <div class="brand-foot">
+            <p>Eh · DO · 水位 · 雨情　四线合参</p>
+            <p class="brand-meta">青禾智慧农场 · 校园网部署</p>
         </div>
 
-        <button class="login-btn" id="registerBtn" onclick="handleRegister()">注 册</button>
-
-        <div class="login-extra">
-            <a href="javascript:void(0)" onclick="switchPanel('login')">返回登录</a>
+        <div class="brand-seal" aria-hidden="true">
+            <span>青</span><span>禾</span><span>智</span><span>灌</span>
         </div>
-    </div>
-</div>
+    </aside>
 
-<div class="footer">
-    青禾智灌 &copy; 2026
+    <!-- 右侧：登录 / 注册 -->
+    <main class="form-panel">
+        <div class="form-frame">
+
+            <section class="login-card" id="loginPanel">
+                <header class="card-head">
+                    <h2>账号登录</h2>
+                    <span class="card-en">SIGN IN</span>
+                </header>
+                <p class="card-sub">进入田间监控台，查看水位、根区氧位与未来六日雨情。</p>
+
+                <div class="input-row">
+                    <label for="loginUsername">账号</label>
+                    <input type="text" id="loginUsername" placeholder="请输入用户名" autocomplete="username">
+                </div>
+                <div class="input-row">
+                    <label for="loginPassword">密码</label>
+                    <input type="password" id="loginPassword" placeholder="请输入密码" autocomplete="current-password"
+                           onkeydown="if(event.key==='Enter') handleLogin();">
+                </div>
+
+                <button class="login-btn" id="loginBtn" onclick="handleLogin()">登 录</button>
+
+                <div class="login-extra">
+                    还没有账号？<a href="javascript:void(0)" onclick="switchPanel('register')">注册新账号</a>
+                </div>
+            </section>
+
+            <section class="login-card" id="registerPanel" style="display: none;">
+                <header class="card-head">
+                    <h2>账号注册</h2>
+                    <span class="card-en">REGISTER</span>
+                </header>
+                <p class="card-sub">创建账户后，可在同一页面接入自己田块的传感与指令通道。</p>
+
+                <div class="input-row">
+                    <label for="regUsername">账号</label>
+                    <input type="text" id="regUsername" placeholder="设置用户名" autocomplete="username">
+                </div>
+                <div class="input-row">
+                    <label for="regPassword">设置密码</label>
+                    <input type="password" id="regPassword" placeholder="设置密码" autocomplete="new-password">
+                </div>
+                <div class="input-row">
+                    <label for="regConfirmPassword">确认密码</label>
+                    <input type="password" id="regConfirmPassword" placeholder="再次输入密码" autocomplete="new-password">
+                </div>
+
+                <button class="login-btn" id="registerBtn" onclick="handleRegister()">注 册</button>
+
+                <div class="login-extra">
+                    已有账号？<a href="javascript:void(0)" onclick="switchPanel('login')">返回登录</a>
+                </div>
+            </section>
+
+        </div>
+        <div class="form-foot">青禾智灌 © 2026　智能灌溉管理平台</div>
+    </main>
+
 </div>
 
 <script src="{{ url_for('static', filename='js/login.js') }}" defer></script>
