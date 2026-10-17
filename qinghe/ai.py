@@ -17,6 +17,168 @@ def _wrap(content: str) -> dict:
     return {'choices': [{'message': {'content': content}}]}
 
 
+#: 快照文本上限：太长会挤占模型上下文，只保留关键读数
+SNAPSHOT_MAX_CHARS = 1800
+
+
+def _num(value, digits=1, unit=''):
+    """把可能为 None 的数值格式化成 `12.3 mm` 形式。"""
+    if value is None:
+        return '未知'
+    try:
+        return ('%.*f%s' % (digits, float(value), unit))
+    except (TypeError, ValueError):
+        return '未知'
+
+
+def _trend(points, digits=1):
+    """把按时间正序的数值序列压缩成「首→末」趋势描述。"""
+    series = [p for p in points if p is not None]
+    if len(series) < 2:
+        return '样本不足'
+    return '%.*f→%.*f' % (digits, series[0], digits, series[-1])
+
+
+def build_snapshot(uid: int) -> str:
+    """拼装「实时快照」文本，随用户提问一起交给 AI。
+
+    内容来自服务端真实数据：当前地块、四路读数、RORI 与分级建议、阈值与
+    6 日降雨前馈、设备状态、最近 1 小时趋势。任何一步失败都只丢那一行，
+    绝不抛异常（AI 问答不能因为取数失败而 500）。
+
+    返回: 快照文本；连地块信息都取不到时返回空串（调用方按无上下文处理）。
+    """
+    try:
+        from qinghe import db, heartbeat, planner
+    except Exception:  # noqa: BLE001 - 依赖缺失时退化为无上下文问答
+        return ''
+
+    try:
+        ctx = planner.build_context(uid)
+    except Exception:  # noqa: BLE001
+        return ''
+
+    lines = []
+    try:
+        cfg = db.load_config(uid)
+        farm_name = (cfg['farm_name'] if cfg else '') or '未命名地块'
+        lng = (cfg['farm_lng'] if cfg else '') or ''
+        lat = (cfg['farm_lat'] if cfg else '') or ''
+        where = farm_name
+        if lng and lat:
+            where += '（%s, %s）' % (lng, lat)
+        lines.append('当前地块：%s' % where)
+    except Exception:  # noqa: BLE001
+        pass
+
+    has_telemetry = bool(ctx.get('has_telemetry'))
+    level = ctx.get('rori_level') or {}
+    if has_telemetry:
+        lines.append(
+            '四路读数：渠道水位 %s，土壤湿润度 %s，溶解氧 %s，氧化还原电位 %s'
+            % (
+                _num(ctx.get('water_mm'), 1, ' mm'),
+                _num(ctx.get('soil_pct'), 1, '%'),
+                _num(ctx.get('do_mgl'), 2, ' mg/L'),
+                _num(ctx.get('eh_mv'), 0, ' mV'),
+            )
+        )
+        lines.append(
+            'RORI %s（%s）：%s'
+            % (
+                _num(ctx.get('rori'), 1),
+                level.get('name', '未知'),
+                level.get('strategy', ''),
+            )
+        )
+    else:
+        # 没有遥测时不要拿安全默认值 0 冒充真实读数（会误导模型与用户）
+        lines.append('四路读数：暂无（设备尚未上报数据）')
+        lines.append('RORI 未知：缺少实时读数，无法判定根区氧环境')
+    try:
+        thresh = db.load_thresholds(uid)
+    except Exception:  # noqa: BLE001
+        thresh = None
+    if thresh is not None:
+        thresh_text = '阈值：土壤湿度 %s–%s%%，水位 %s–%s mm；' % (
+            thresh['humi_down'], thresh['humi_up'],
+            thresh['waterlevel_down'], thresh['waterlevel_up'],
+        )
+    else:
+        thresh_text = '阈值：未设置（按默认值运行）；'
+    lines.append(
+        thresh_text + '6 日加权降雨 P6d=%s mm，α=%s，动态湿度下限 %s%%、上限 %s%%'
+        % (
+            _num(ctx.get('p6d'), 1),
+            _num(ctx.get('alpha'), 2),
+            _num(ctx.get('eff_lower'), 1),
+            _num(ctx.get('eff_upper'), 1),
+        )
+    )
+    lines.append(
+        '设备：气泵 %s，水泵 %s'
+        % (ctx.get('air_pump') or '未知', ctx.get('water_pump') or '未知')
+    )
+
+    try:
+        status = heartbeat.get_status(uid)
+        last_seen = int(status.get('last_seen_ts') or 0)
+        state = '在线' if status.get('online') else '离线'
+        if last_seen:
+            silent = status.get('silent_seconds')
+            if silent is not None:
+                state += '（%.0f 秒前有上报）' % float(silent)
+            lines.append('设备连接：%s' % state)
+        else:
+            lines.append('设备连接：尚未收到心跳（设备可能未上电或未联网）')
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
+        rows = db.query_history(uid, 40)
+        rows = list(reversed(rows))
+        if rows:
+            water = [r['water_adc'] for r in rows]
+            dos = [r['do_mgl'] for r in rows]
+            lines.append(
+                '近 40 条采样趋势：水位 ADC %s（换算 %s），溶解氧 %s mg/L'
+                % (
+                    _trend(water, 0),
+                    _trend([_water_mm_of(uid, w) for w in water], 1),
+                    _trend(dos, 2),
+                )
+            )
+    except Exception:  # noqa: BLE001
+        pass
+
+    try:
+        precips = planner._forecast_precips(uid) or []
+        if precips:
+            lines.append(
+                '未来 6 日预报降雨（mm，按日）：%s'
+                % '、'.join('%.1f' % float(p) for p in precips[:6])
+            )
+    except Exception:  # noqa: BLE001
+        pass
+
+    lines.append(
+        '请结合以上实时数据作答：优先给出可执行结论（是否需要开/关水泵、气泵，阈值是否要调），'
+        '并在引用数字时与快照保持一致；数据缺失时明确说明缺什么，不要编造读数。'
+    )
+    text = '\n'.join('- ' + line if i else line for i, line in enumerate(lines))
+    return text[:SNAPSHOT_MAX_CHARS]
+
+
+def _water_mm_of(uid: int, water_adc):
+    """把历史水位 ADC 换算成 mm，供快照里的趋势展示。取不到返回 None。"""
+    try:
+        from qinghe import irrigation
+
+        return irrigation.adc_to_water_mm(water_adc)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def load_ai_config(uid: int):
     """读取用户的 AI 配置行（ai_domain / ai_key），不存在返回 None。"""
     return db.load_ai_config(uid)
@@ -46,9 +208,16 @@ def build_chat_request(ai_domain, user_msg: str):
     return url, headers, body
 
 
-def chat(ai_domain, ai_key, user_msg: str) -> dict:
-    """调用 AI 接口并返回可直接 jsonify 的 dict。"""
+def chat(ai_domain, ai_key, user_msg: str, context: str = None) -> dict:
+    """调用 AI 接口并返回可直接 jsonify 的 dict。
+
+    参数:
+        context: 可选的「实时快照」文本。非空时作为第二条 system 消息插在
+                 固定系统提示之后、用户提问之前，让模型带着实时读数作答。
+    """
     url, headers, body = build_chat_request(ai_domain, user_msg)
+    if context:
+        body['messages'].insert(1, {'role': 'system', 'content': context})
     headers['Authorization'] = 'Bearer %s' % ai_key
     try:
         resp = requests.post(url, headers=headers, json=body, timeout=config.TIMEOUT_AI)

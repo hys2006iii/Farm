@@ -207,6 +207,20 @@ def update_telemetry(uid: int, **kw) -> None:
         slot['ts'] = now_ms
 
 
+def reset_telemetry(uid: int) -> None:
+    """清空某用户的实时遥测缓存。
+
+    切换地块 / 重置演示数据时调用：旧遥测属于上一块地，留着会让看板与
+    AI 上下文串地块。
+    """
+    try:
+        uid = int(uid)
+    except (TypeError, ValueError):
+        return
+    with _latest_lock:
+        _latest.pop(uid, None)
+
+
 def _forecast_precips(uid: int):
     """取最近 6 日降雨预报（mm 列表）；无 Key / 请求失败 / 数据异常返回 None。"""
     try:
@@ -233,13 +247,24 @@ def _forecast_precips(uid: int):
     return precips or None
 
 
-def build_context(uid: int) -> dict:
+def forecast_precips(uid: int):
+    """公开封装：取未来 6 日报雨（mm 列表）；无 Key / 失败返回 None。
+
+    七日灌溉建议等只读功能复用它，避免和 `build_context()` 各打一次天气接口。
+    """
+    return _forecast_precips(uid)
+
+
+def build_context(uid: int, precips=None) -> dict:
     """汇总感知上下文快照（遥测缓存 + 阈值 + 可选天气前馈）。
 
     返回字段与规格逐字一致：`rori`、`rori_level`（code/name/strategy）、`water_mm`、
     `soil_pct`、`do_mgl`、`eh_mv`、`air_pump`、`water_pump`、`p6d`、`alpha`、
     `eff_lower`、`eff_upper`、`manual_mode`、`ts`。
     遥测缺失的字段按安全默认值填充（数值取 0，无法判定的取 None），不抛异常。
+
+    参数:
+        precips: 可选，已取到的 6 日报雨列表；传入则不再请求天气接口。
     """
     _ensure_schema()
     uid = int(uid)
@@ -265,7 +290,7 @@ def build_context(uid: int) -> dict:
     if rori is None and None not in (water_adc, soil_adc, do_mgl, eh_mv):
         rori = irrigation.compute_rori(water_adc, soil_adc, do_mgl, eh_mv)
 
-    precips = _forecast_precips(uid)
+    precips = _forecast_precips(uid) if precips is None else precips
     dynamic = irrigation.compute_dynamic_threshold(humi_down, humi_up, precips or [])
 
     return {
@@ -283,6 +308,8 @@ def build_context(uid: int) -> dict:
         'eff_upper': round(float(dynamic['effUpper']), 2),
         'manual_mode': int(thresholds.get('manual_mode') or 0),
         'ts': int(snap.get('ts') or time.time() * 1000),
+        # 是否真的收到过遥测：用来区分「0 mm 的真读数」与「没有数据的安全默认值」
+        'has_telemetry': bool(snap),
     }
 
 

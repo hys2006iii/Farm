@@ -186,7 +186,10 @@ def test_api_ai_chat_without_key_returns_tip(client, auth_headers, monkeypatch):
                         lambda *a, **k: pytest.fail('无 Key 时不应发起请求'))
     resp = client.post('/api/ai_chat', json={'message': 'hi'}, headers=auth_headers)
     assert resp.status_code == 200
-    assert _content(resp.get_json()) == NO_KEY_TIP
+    content = _content(resp.get_json())
+    # 无 Key 时除固定提示外还会附上服务端实时快照，让用户确认系统读到了什么
+    assert content.startswith(NO_KEY_TIP)
+    assert '当前地块' in content
 
 
 def test_api_ai_chat_with_key_proxies(client, auth_headers, monkeypatch):

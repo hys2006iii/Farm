@@ -345,10 +345,12 @@ def _feed_insight(uid, values: dict, now_ms: int) -> None:
     except Exception:  # noqa: BLE001
         pass
 
-    # 5) 服务端告警判定（限频，避免每条上报都查库）
+    # 服务端告警判定（限频，避免每条上报都查库）
+    # 注意限频用**墙钟**而不是报文里的 ts：模拟器/补传会一次性灌入带历史
+    # 时间戳的批次，用报文时间做限频会把整批都判成「刚判过」而全部跳过。
     if water_mm is None or soil_pct is None:
         return
-    now_s = now_ms / 1000.0
+    now_s = time.time()
     with _alert_eval_lock:
         last = _alert_eval_last.get(uid, 0.0)
         if now_s - last < _ALERT_EVAL_INTERVAL:
@@ -388,6 +390,44 @@ def _feed_insight(uid, values: dict, now_ms: int) -> None:
             )
     except Exception:  # noqa: BLE001
         pass
+
+
+def ingest_telemetry(uid, values: dict, ts=None, emit=None, writer=None) -> dict:
+    """把一帧已解析的遥测走完整链路（历史落库 + 旁路分发 + 前端事件）。
+
+    与 MQTT 上报复用同一套处理逻辑，供设备模拟器 / 自测使用；区别只在于
+    允许指定历史时间戳（`ts`，毫秒），便于一次灌入一段带时间序列的数据。
+
+    参数:
+        values: 属性字典，键与 MQTT 报文一致：waterlevel / humidity / do / eh /
+                air_pump / water_pump / temperature / humidity_air ...
+        ts:     毫秒时间戳；缺省取当前时间。
+        emit:   前端推送函数，缺省用 `realtime.emit_hw_data`；传 `False` 可关闭推送。
+        writer: 历史写入器，缺省用模块级 `history_writer`。
+
+    返回: `{'sample': (water_adc, soil_adc, ts, do_mgl, eh_mv) | None, 'ts': int}`
+    """
+    writer = writer or history_writer
+    now_ms = int(time.time() * 1000) if ts is None else int(ts)
+    sample = extract_history_sample(values, now_ms)
+    if sample is not None:
+        water_adc, soil_adc, sample_ts, do_mgl, eh_mv = sample
+        writer.enqueue(uid, sample_ts, water_adc, soil_adc, do_mgl, eh_mv)
+    else:
+        sample_ts = now_ms
+
+    if emit is None:
+        from qinghe import realtime
+
+        emit = realtime.emit_hw_data
+    if emit:
+        try:
+            emit(uid, {'type': 'data', 'topic': 'data', 'payload': dict(values)})
+        except Exception:  # noqa: BLE001 - 推送失败不影响落库
+            pass
+
+    _feed_insight(uid, values, sample_ts)
+    return {'sample': sample, 'ts': sample_ts}
 
 
 def handle_mqtt_message(uid, topic, content, emit=None, writer=None) -> None:
