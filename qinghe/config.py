@@ -6,6 +6,8 @@
 """
 
 import os
+import secrets
+import threading
 
 # ============================================================
 # 一、应用基础配置
@@ -16,8 +18,8 @@ APP_NAME = '青禾智灌智慧灌溉管理平台'
 #: 数据库文件路径，可用 FARM_DB_PATH 覆盖（测试用临时文件）
 DB_PATH = os.environ.get('FARM_DB_PATH', 'qinghe.db')
 
-#: 会话签名密钥。优先读 FARM_SECRET_KEY；未配置时使用兜底值，
-#: 兜底值仅为「本地能直接启动」服务，生产必须显式配置。
+#: 会话签名密钥哨兵值。**仅用于判断「是否显式配置了 FARM_SECRET_KEY」，绝不作为签名密钥使用。**
+#: 未配置时由 `get_secret_key()` 生成本进程随机密钥（见该函数 docstring）。
 FALLBACK_SECRET_KEY = 'smart_irrigation_secret_2026'
 
 #: 默认监听端口（Werkzeug 调试服务器）
@@ -71,6 +73,10 @@ LOGIN_LOCK_SECONDS = 600
 
 #: 敏感字段在 GET /api/get_config 中回显的掩码占位符
 MASK = '••••••••'
+
+#: 告警文案长度上限（/api/notify_alert 截断用）
+ALERT_CONTENT_MAX_LEN = 500
+ALERT_LEVEL_MAX_LEN = 20
 
 #: iot_port 合法范围
 IOT_PORT_MIN = 1
@@ -169,9 +175,53 @@ def is_debug() -> bool:
     return os.environ.get('FARM_DEBUG', '0') == '1'
 
 
+def trust_proxy() -> bool:
+    """是否信任反向代理传来的 `X-Forwarded-For`。
+
+    **默认关闭**。直连部署时客户端可随意伪造 XFF 头，若据此做登录限流
+    等于把限流开关交给攻击者（换头即重置计数，可无限爆破）。仅当服务确实
+    部署在 nginx / waitress 等反向代理之后，才设 `FARM_TRUST_PROXY=1`。
+    """
+    return os.environ.get('FARM_TRUST_PROXY', '0') == '1'
+
+
+#: 未配置 FARM_SECRET_KEY 时生成的进程级随机密钥（首次调用时惰性创建，进程内复用）。
+#: 每次启动都不同 —— 攻击者无法预知，因此无法伪造 JWT / 会话签名。
+_RUNTIME_SECRET_KEY = None
+_SECRET_LOCK = threading.Lock()
+
+
+def secret_key_is_configured() -> bool:
+    """是否显式配置了 FARM_SECRET_KEY（用于告警判定）。"""
+    return bool(os.environ.get('FARM_SECRET_KEY'))
+
+
 def get_secret_key() -> str:
-    """取会话签名密钥：优先环境变量 FARM_SECRET_KEY，未设置时用兜底值。"""
-    return os.environ.get('FARM_SECRET_KEY') or FALLBACK_SECRET_KEY
+    """取会话 / JWT 签名密钥。
+
+    优先读环境变量 `FARM_SECRET_KEY`；**未配置时生成进程级随机密钥**
+    （`secrets.token_urlsafe(48)`，约 64 字符），而不是回落到硬编码常量。
+
+    安全考量：旧实现回落到公开的硬编码常量，任何人可用它自签 JWT 冒充任意
+    `user_id` 调用 `/api/app_send_command` 真实下发设备指令（fail-open）。
+    改为随机密钥后攻击者无法预知，属 fail-closed；代价是未配置时**重启后
+    既有登录态失效**，生产应显式配置 `FARM_SECRET_KEY`（见 `.env.example`）。
+    """
+    configured = os.environ.get('FARM_SECRET_KEY')
+    if configured:
+        return configured
+    global _RUNTIME_SECRET_KEY
+    with _SECRET_LOCK:
+        if _RUNTIME_SECRET_KEY is None:
+            _RUNTIME_SECRET_KEY = secrets.token_urlsafe(48)
+        return _RUNTIME_SECRET_KEY
+
+
+def reset_runtime_secret_key() -> None:
+    """清空进程级随机密钥（仅供测试模拟「进程重启」）。"""
+    global _RUNTIME_SECRET_KEY
+    with _SECRET_LOCK:
+        _RUNTIME_SECRET_KEY = None
 
 
 def get_db_path() -> str:

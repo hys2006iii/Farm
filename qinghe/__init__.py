@@ -20,16 +20,19 @@ socketio = SocketIO()
 _logger = logging.getLogger('qinghe')
 
 _SECRET_WARN = (
-    '安全警告：未配置环境变量 FARM_SECRET_KEY，正在使用内置兜底密钥。'
-    '生产环境（FARM_DEBUG=0）请务必设置 FARM_SECRET_KEY，否则会话签名可被伪造。'
+    '安全警告：未配置环境变量 FARM_SECRET_KEY，已使用本进程随机密钥。'
+    '重启后登录态（会话 / JWT）将全部失效；生产请运行 tools/gen_secret.py 生成密钥并写入 .env。'
 )
 
 
 def _warn_default_secret() -> None:
-    """兜底密钥 + 非调试模式时打印显著警告（不改变任何启动行为）。"""
-    if config.get_secret_key() != config.FALLBACK_SECRET_KEY:
-        return
-    if config.is_debug():
+    """未显式配置密钥时打印一次显著警告（不改变任何启动行为）。
+
+    注意：此时签名用的是 `config.get_secret_key()` 生成的**进程级随机密钥**，
+    而非硬编码常量，因此不存在「公开密钥可伪造 JWT」的问题；告警只为提示
+    运维显式配置以获得跨重启稳定的会话。
+    """
+    if config.secret_key_is_configured():
         return
     _logger.warning('*' * 78)
     _logger.warning(_SECRET_WARN)
