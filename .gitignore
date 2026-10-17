@@ -1,0 +1,25 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# 数据库（含真实用户数据，不入库）
+*.db
+*.db-journal
+*.db-wal
+*.sqlite3
+
+# 敏感凭据
+api key.txt
+esp_secrets.txt
+
+# 文档产物（体积大，按需再决定是否入库）
+docs/_raw/
+*.pdf
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

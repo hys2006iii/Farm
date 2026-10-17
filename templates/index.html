@@ -1,0 +1,1615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>青禾智灌</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.1/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #F0F4EF;
+            --card: #FFFFFF;
+            --card-border: #E3E9E2;
+            --primary: #1F6B45;
+            --primary-dark: #174D32;
+            --primary-light: #E7F3EB;
+            --accent: #2E7D8C;
+            --warn: #E8A33D;
+            --danger: #E5534B;
+            --text: #23332B;
+            --text-sub: #6B7A72;
+            --shadow: 0 2px 10px rgba(31, 60, 43, 0.08);
+            --shadow-hover: 0 6px 20px rgba(31, 60, 43, 0.14);
+            --radius: 14px;
+        }
+        body {
+            font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+            background: linear-gradient(160deg, #F0F4EF 0%, #E8F0E8 60%, #E2ECE6 100%);
+            color: var(--text); min-height: 100vh;
+            display: flex; flex-direction: column;
+        }
+        /* ===== 顶栏 ===== */
+        .topbar {
+            position: sticky; top: 0; z-index: 100;
+            background: rgba(23, 48, 36, 0.92); backdrop-filter: blur(10px);
+            color: #D6E8D8; padding: 10px 28px;
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: 10px; user-select: none;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+        }
+        .topbar-left { display: flex; align-items: center; gap: 16px; }
+        .topbar-logo { font-size: 20px; font-weight: 800; color: #E8F5EA; letter-spacing: 2px; }
+        .topbar-title { font-size: 16px; font-weight: 600; color: #C9E0CD; opacity: 0.9; }
+        .topbar-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+        .topbar-time { display: flex; flex-direction: row; align-items: baseline; gap: 8px; }
+        .topbar-time .date { font-size: 16px; color: #90A896; font-variant-numeric: tabular-nums; }
+        .topbar-time .time { font-size: 22px; font-weight: 700; color: #E8F5EA; font-variant-numeric: tabular-nums; }
+        .topbar-btn {
+            background: var(--primary); color: #F0F7F1; border: none; border-radius: 8px;
+            padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+            transition: 0.15s; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+        }
+        .topbar-btn:hover { background: #2A7D50; transform: translateY(-1px); }
+        .topbar-btn-outline { background: transparent; border: 1px solid #5A8A66; color: #D6E8D8; }
+        .topbar-btn-outline:hover { background: rgba(90,138,102,0.15); transform: none; }
+        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+        .dot-green { background: #4FC46A; box-shadow: 0 0 6px #4FC46A; }
+        .dot-red { background: #E5534B; box-shadow: 0 0 6px #E5534B; }
+        .dot-gray { background: #888; }
+        .status-pill {
+            font-size: 12px; color: #D6E8D8;
+            display: flex; align-items: center;
+        }
+        .status-col { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; margin-left: auto; }
+        .status-col .status-pill { justify-content: flex-end; }
+        /* ===== 主布局 ===== */
+        .main-wrap {
+            flex: 1; padding: 20px 24px 16px;
+            display: grid; grid-template-columns: 7fr 5fr; gap: 20px;
+            max-width: 1500px; margin: 0 auto; width: 100%;
+        }
+        .left-col, .right-col { display: flex; flex-direction: column; min-width: 0; }
+        .section.full-span { grid-column: 1 / -1; }
+        .section.log-stretch { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
+        .section.log-stretch .section-bd { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
+        .section.log-stretch .log-scroll { flex: 1 1 0; height: auto; min-height: 0; overflow-y: auto; }
+        .section {
+            background: var(--card); border: 1px solid var(--card-border);
+            border-radius: var(--radius); margin-bottom: 20px;
+            box-shadow: var(--shadow); overflow: hidden;
+            transition: box-shadow 0.2s, transform 0.2s;
+        }
+        .section:hover { box-shadow: var(--shadow-hover); }
+        .section-hd {
+            background: linear-gradient(90deg, var(--primary-light), #F7FAF7);
+            padding: 12px 18px; font-size: 14px; font-weight: 700; color: var(--primary-dark);
+            border-bottom: 1px solid var(--card-border);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .section-hd::before { content: ""; width: 4px; height: 16px; border-radius: 2px; background: var(--primary); }
+        .section-hd .hd-right { margin-left: auto; }
+        .chart-toggle {
+            background: var(--primary); color: #F0F7F1; border: none; border-radius: 8px;
+            padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.15s;
+        }
+        .chart-toggle:hover { background: #2A7D50; }
+        .section-bd { padding: 16px 18px; }
+        /* ===== 气象栏 ===== */
+        .weather-bar {
+            background: linear-gradient(120deg, #2A5A6B, #3B7A8C); color: #EAF4F4;
+            padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;
+        }
+        .weather-bar .loc { font-size: 22px; font-weight: 700; line-height: 1.2; }
+        .weather-bar .loc-sub { font-size: 12px; opacity: 0.75; margin-top: 3px; }
+        .weather-bar .temp { font-size: 30px; font-weight: 800; }
+        .weather-bar .hum { font-size: 13px; opacity: 0.85; margin-top: 2px; }
+        /* ===== 传感器网格 ===== */
+        .sensor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+        .sensor-cell.full { grid-column: 1 / -1; }
+        .sensor-cell {
+            background: linear-gradient(160deg, #F8FBF9, #F0F5F1);
+            border: 1px solid var(--card-border); border-radius: 10px;
+            padding: 14px; text-align: center; transition: transform 0.15s;
+        }
+        .sensor-cell:hover { transform: translateY(-2px); }
+        .sensor-cell .label { font-size: 12px; color: var(--text-sub); font-weight: 600; margin-bottom: 6px; }
+        .sensor-cell .value {
+            font-size: 34px; font-weight: 800; color: var(--text);
+            font-variant-numeric: tabular-nums; letter-spacing: -1px;
+        }
+        .sensor-cell .unit { font-size: 13px; color: var(--text-sub); margin-left: 3px; }
+        .sensor-cell .value.status { font-size: 26px; }
+        /* ===== RORI 行 ===== */
+        .rori-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px 18px; background: linear-gradient(160deg, #F8FBF9, #F0F5F1);
+            border: 1px solid var(--card-border); border-radius: 10px;
+        }
+        .rori-row .rori-gauge-wrap { display: flex; align-items: center; gap: 18px; }
+        .rori-title { font-size: 13px; font-weight: 700; color: #4A5A50; }
+        .rori-status { font-size: 13px; color: #7A8A80; margin-top: 3px; }
+        .rori-val { font-size: 40px; font-weight: 800; }
+        .rori-unit { font-size: 13px; color: #7A8A80; font-weight: 600; }
+        /* ===== 降雨 ===== */
+        .fc-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+        .fc-item {
+            background: #F8FBF9; border: 1px solid var(--card-border);
+            border-radius: 10px; padding: 12px 6px; text-align: center; transition: transform 0.15s;
+        }
+        .fc-item:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+        .fc-date { font-size: 13px; font-weight: 600; color: #5A4E42; margin-bottom: 3px; }
+        .fc-value { font-size: 17px; font-weight: 700; color: #3B6A7A; }
+        .fc-value .unit { font-size: 11px; color: #8A7E72; font-weight: 400; margin-left: 2px; }
+        .fc-tag { font-size: 12px; color: #8A7E72; margin-top: 4px; }
+        .fc-empty { grid-column: 1 / -1; color: #7A8A80; text-align: center; padding: 16px 0; }
+        /* ===== 控制 ===== */
+        .ctrl-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #EDF1EC; }
+        .ctrl-item .ctrl-name { font-size: 14px; font-weight: 600; }
+        .ctrl-btns { display: flex; gap: 8px; }
+        .ctrl-btns .btn { border: none; border-radius: 8px; padding: 7px 18px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.15s; }
+        .btn-on { background: var(--primary); color: #F0F7F1; }
+        .btn-on:hover { background: #2A7D50; }
+        .btn-off { background: #E8EDE9; color: #55665C; }
+        .btn-off:hover { background: #DDE4DF; }
+        .btn-wide { border: none; border-radius: 10px; width: 100%; padding: 11px; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 12px; transition: 0.15s; }
+        .btn-wide:hover { filter: brightness(1.08); }
+        /* ===== 阈值滑杆 ===== */
+        .thresh-group { margin-bottom: 16px; padding-bottom: 12px; }
+        .thresh-group.divider { border-bottom: 1px dashed #D0C8BE; }
+        .thresh-name { font-size: 13px; font-weight: 600; color: #5A4E42; }
+        .thresh-val { font-weight: 700; }
+        .thresh-val .lo { color: #C8903F; }
+        .thresh-val .hi { color: #3B6B4A; }
+        .thresh-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .dual-range-container { position: relative; width: 100%; height: 36px; display: flex; align-items: center; margin-top: 4px; }
+        .dual-range-track { position: absolute; left: 8px; right: 8px; height: 8px; background: #E3E9E4; border-radius: 4px; z-index: 1; }
+        .dual-range-container input[type=range] {
+            position: absolute; width: 100%; background: transparent; pointer-events: none;
+            -webkit-appearance: none; margin: 0; z-index: 2; height: 36px;
+        }
+        .dual-range-container input[type=range]::-webkit-slider-thumb {
+            pointer-events: auto; width: 20px; height: 20px; border-radius: 50%;
+            background: var(--primary); border: 3px solid #fff; cursor: pointer;
+            -webkit-appearance: none; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+        }
+        .dual-range-container input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+        /* ===== 禁用态 ===== */
+        .panel-disabled { opacity: 0.4; pointer-events: none; filter: grayscale(100%); }
+        .control-group-disabled { opacity: 0.35; pointer-events: none; filter: grayscale(60%); }
+        /* ===== 图表 ===== */
+        .chart-box { position: relative; height: 220px; margin-top: 8px; }
+        .chart-box.small { height: 140px; }
+        /* 合并后的手动/自动调控面板 */
+        .control-sub-hd { font-size: 13px; font-weight: 700; color: #3B6B4A; margin: 2px 0 10px; }
+        .control-divider { height: 1px; background: #E2E8E2; margin: 16px 0; }
+        /* 实时趋势：水位 / 土壤湿度 左右分开 */
+        .trend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+        .trend-title { font-size: 12px; color: #7A8A80; font-weight: 600; margin-bottom: 4px; }
+        /* ===== 日志 ===== */
+        .log-scroll { height: 172px; overflow-y: auto; font-size: 13px; }
+        .log-item { padding: 9px 12px; border: 1px solid #EDF1EC; border-radius: 8px; margin-bottom: 8px; background: #FAFCFA; }
+        .log-item .log-time { font-size: 11px; color: #9AA79F; font-weight: 600; }
+        .log-item.log-danger { color: var(--danger); }
+        .log-item.log-info { color: var(--accent); }
+        .log-item.log-safe { color: var(--primary); }
+        /* ===== 告警列表 ===== */
+        .alert-list { height: 172px; overflow-y: auto; font-size: 13px; }
+        .list-empty { text-align: center; color: #7A8A80; padding: 12px; }
+        /* ===== 提示条 ===== */
+        .notice {
+            display: none; margin-top: 10px; font-size: 12px; color: #5A4E42;
+            background: #F2F7F3; border: 1px solid #DDE8E0; border-radius: 8px; padding: 8px 10px;
+        }
+        .alert-item { padding: 8px 12px; border-radius: 8px; margin-bottom: 8px; background: #FFF8F2; border-left: 3px solid var(--warn); }
+        .alert-item.level-danger { background: #FDECEA; border-left-color: var(--danger); }
+        .alert-item.level-warn { background: #FFF8F2; border-left-color: var(--warn); }
+        .alert-item .alert-time { font-size: 11px; color: #9AA79F; }
+        .alert-item .alert-msg { margin-top: 2px; font-weight: 500; }
+        /* ===== 弹窗 ===== */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(20,30,24,0.55); display: flex; justify-content: center; align-items: center; z-index: 9999; backdrop-filter: blur(3px); }
+        .modal-overlay.hidden { opacity: 0; pointer-events: none; }
+        .modal-box { background: #fff; border-radius: 16px; width: 500px; padding: 26px; max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.25); }
+        .modal-hd { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid #EDF1EC; }
+        .modal-hd h2 { color: var(--primary-dark); }
+        .modal-hd button { background: #EDF1EC; border: none; width: 28px; height: 28px; border-radius: 50%; font-weight: 700; cursor: pointer; color: #55665C; }
+        .modal-hd button:hover { background: #DFE6E1; }
+        .ai-chat-box { width: 640px; height: 600px; display: flex; flex-direction: column; }
+        .chat-history { flex: 1; overflow-y: auto; background: #F6F9F6; border: 1px solid #E3E9E4; border-radius: 10px; padding: 14px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; }
+        .chat-bubble { max-width: 80%; padding: 10px 14px; font-size: 14px; line-height: 1.6; border-radius: 12px; }
+        .chat-ai { align-self: flex-start; background: #fff; border: 1px solid #E3E9E4; border-bottom-left-radius: 4px; }
+        .chat-user { align-self: flex-end; background: var(--primary); color: #F0F7F1; border-bottom-right-radius: 4px; }
+        .chat-input-area { display: flex; gap: 8px; }
+        .chat-input-area input { flex: 1; padding: 11px 14px; border: 1px solid #DDE4DF; border-radius: 10px; background: #F6F9F6; font-size: 14px; }
+        .chat-input-area input:focus { outline: 2px solid var(--primary); border-color: transparent; }
+        /* ===== 设置表单 ===== */
+        .cfg-row { margin-bottom: 12px; }
+        .cfg-row label { display: block; font-size: 12px; font-weight: 600; color: #55665C; margin-bottom: 5px; }
+        .cfg-row input {
+            width: 100%; padding: 8px 10px; font-size: 13px;
+            border: 1px solid #DDE4DF; border-radius: 8px; background: #F6F9F6; color: var(--text);
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+        .cfg-row input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(31,107,69,0.12); }
+        .cfg-row input[disabled] { background: #EEF2EF; color: #6B7A72; cursor: not-allowed; }
+        .cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+        .cfg-grid .cfg-row { margin-bottom: 0; }
+        .cfg-row .btn-link {
+            background: var(--primary); color: #F0F7F1; border: none; border-radius: 8px;
+            padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.15s;
+        }
+        .cfg-row .btn-link:hover { background: #2A7D50; }
+        .cfg-actions { display: flex; gap: 10px; margin-top: 20px; }
+        .cfg-actions .btn-danger { background: #C85A5A; }
+        .cfg-actions .btn-danger:hover { background: #B84A4A; }
+        /* ===== toast ===== */
+        .toast-container { position: fixed; top: 70px; right: 24px; z-index: 10000; display: flex; flex-direction: column; gap: 8px; }
+        .toast {
+            background: #fff; border-radius: 10px; padding: 12px 18px; font-size: 13px; font-weight: 600;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.18); border-left: 4px solid var(--primary);
+            animation: toast-in 0.3s ease; max-width: 340px;
+        }
+        .toast.warn { border-left-color: var(--warn); }
+        .toast.danger { border-left-color: var(--danger); }
+        .toast.success { border-left-color: var(--primary); }
+        @keyframes toast-in { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
+        .footer { background: rgba(23,48,36,0.9); color: #90A896; text-align: center; padding: 12px 24px; font-size: 12px; }
+        .alert-banner { background: var(--danger); color: white; font-size: 15px; font-weight: 600; text-align: center; padding: 10px; }
+        .hidden { display: none !important; }
+        /* ===== 响应式 ===== */
+        @media (max-width: 900px) {
+            .main-wrap { grid-template-columns: 1fr; padding: 14px; }
+            .topbar { padding: 8px 14px; }
+            .fc-grid { grid-template-columns: repeat(3, 1fr); }
+            .sensor-grid { grid-template-columns: 1fr 1fr; }
+            .topbar-title { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="topbar">
+    <div class="topbar-left">
+        <span class="topbar-logo">青禾智灌</span>
+        <span class="topbar-title">实时监控中心</span>
+    </div>
+    <div class="topbar-right">
+        <div class="topbar-time">
+            <div class="date" id="sysDate">--</div>
+            <div class="time" id="sysTime">--:--:--</div>
+        </div>
+        <button class="topbar-btn" onclick="openModal('chatModal')">AI 助手</button>
+        <button class="topbar-btn topbar-btn-outline" onclick="openModal('configModal')">系统设置</button>
+        <div class="status-col">
+            <div class="status-pill" id="cloudStatus"><span class="status-dot dot-gray"></span>华为云：未连接</div>
+            <div class="status-pill" id="deviceStatusPill"><span class="status-dot dot-gray"></span>传感器：未连接</div>
+        </div>
+    </div>
+</div>
+
+<div id="ongoingAlertBanner" class="alert-banner hidden">状态排查中...</div>
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="main-wrap">
+    <div class="left-col">
+        <div class="section">
+            <div class="section-hd">田间区域气象</div>
+            <div class="section-bd" style="padding:0;">
+                <div class="weather-bar">
+                    <div>
+                        <div class="loc" id="locDisplay">未配置坐标</div>
+                        <div class="loc-sub" id="locSubDisplay">请在设置中填入农田坐标</div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div class="temp" id="tempDisplay">--°C</div>
+                        <div class="hum">空气湿度 <span id="humidityDisplay">--</span>%</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section panel-disabled" id="sensorPanel">
+            <div class="section-hd">传感器实时数据</div>
+            <div class="section-bd">
+                <div class="sensor-grid">
+                    <div class="sensor-cell">
+                        <div class="label">渠道水位(WaterLevel)</div>
+                        <div class="value" id="waterDisplay">--<span class="unit">mm</span></div>
+                    </div>
+                    <div class="sensor-cell">
+                        <div class="label">土壤湿度(Humidity)</div>
+                        <div class="value" id="soilDisplay">--<span class="unit">%</span></div>
+                    </div>
+                    <div class="sensor-cell">
+                        <div class="label">根区溶解氧含量(DO)</div>
+                        <div class="value" id="doDisplay">--<span class="unit">mg/L</span></div>
+                    </div>
+                    <div class="sensor-cell">
+                        <div class="label">根区氧化还原电位(Eh)</div>
+                        <div class="value" id="ehDisplay">--<span class="unit">mV</span></div>
+                    </div>
+                    <div class="sensor-cell">
+                        <div class="label">气泵状态</div>
+                        <div class="value status" id="deviceStatus">无信号</div>
+                    </div>
+                    <div class="sensor-cell">
+                        <div class="label">水泵状态</div>
+                        <div class="value status" id="waterPumpStatus">无信号</div>
+                    </div>
+                </div>
+
+                <div class="rori-row">
+                    <div>
+                        <div class="rori-title">根区缺氧风险指数 (RORI)</div>
+                        <div class="rori-status" id="roriStatus">设备离线</div>
+                    </div>
+                    <div class="rori-gauge-wrap">
+                        <div class="rori-val" id="roriDisplay">--</div>
+                        <span class="rori-unit">/ 100</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-hd">未来6日降雨量预测</div>
+            <div class="section-bd">
+                <div class="fc-grid" id="forecastGrid">
+                    <div class="fc-empty">模型加载中...</div>
+                </div>
+                <div id="forecastSummary" class="notice"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-hd">告警记录</div>
+            <div class="section-bd">
+                <div class="alert-list" id="alertList">
+                    <div class="list-empty">暂无告警记录</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="right-col">
+        <div class="section panel-disabled" id="controlPanel">
+            <div class="section-hd">手动调控模式</div>
+            <div class="section-bd">
+                <div class="control-sub-hd">设备手动调控</div>
+                <div id="manualControlGroup" class="control-group-disabled">
+                    <div class="ctrl-item">
+                        <span class="ctrl-name">气泵</span>
+                        <div class="ctrl-btns">
+                            <button class="btn btn-on" onclick="sendManualCommand('air_pump', 'ON')">启动</button>
+                            <button class="btn btn-off" onclick="sendManualCommand('air_pump', 'OFF')">停止</button>
+                        </div>
+                    </div>
+                    <div class="ctrl-item">
+                        <span class="ctrl-name">水泵</span>
+                        <div class="ctrl-btns">
+                            <button class="btn btn-on" onclick="sendManualCommand('water_pump', 'ON')">启动</button>
+                            <button class="btn btn-off" onclick="sendManualCommand('water_pump', 'OFF')">停止</button>
+                        </div>
+                    </div>
+                </div>
+                <button id="modeToggleBtn" class="btn-wide" style="background:#C8903F;color:white;" onclick="toggleMode()">切换至 手动接管模式</button>
+
+                <div id="autoThresholdArea" class="control-group-disabled">
+                    <div class="control-divider"></div>
+
+                    <div class="control-sub-hd">阈值设定</div>
+                    <div class="thresh-group divider">
+                        <div class="thresh-row">
+                            <span class="thresh-name">土壤湿度阈值 (%RH)</span>
+                            <span class="thresh-val">下限 <span class="lo" id="humiDownVal">40</span>% ~ 上限 <span class="hi" id="humiUpVal">80</span>%</span>
+                        </div>
+                        <div class="dual-range-container">
+                            <div class="dual-range-track"></div>
+                            <input type="range" id="humiDownInput" min="0" max="100" value="40" oninput="onHumiditySlider('down')">
+                            <input type="range" id="humiUpInput" min="0" max="100" value="80" oninput="onHumiditySlider('up')">
+                        </div>
+                    </div>
+
+                    <div class="thresh-group">
+                        <div class="thresh-row">
+                            <span class="thresh-name">渠道水位阈值 (mm)</span>
+                            <span class="thresh-val">下限 <span class="lo" id="waterlevelDownVal">30</span>mm ~ 上限 <span class="hi" id="waterlevelUpVal">150</span>mm</span>
+                        </div>
+                        <div class="dual-range-container">
+                            <div class="dual-range-track"></div>
+                            <input type="range" id="waterlevelDownInput" min="0" max="300" value="30" oninput="onWaterLevelSlider('down')">
+                            <input type="range" id="waterlevelUpInput" min="0" max="300" value="150" oninput="onWaterLevelSlider('up')">
+                        </div>
+                    </div>
+
+                    <div id="thresholdFusionHint" class="notice"></div>
+
+                    <button class="btn-wide" style="background:#3B6B4A;color:white;margin-top:16px;" onclick="applyThresholds()">应用参数</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="section log-stretch">
+            <div class="section-hd">运行日志</div>
+            <div class="section-bd">
+                <div class="log-scroll" id="logList">
+                    <div class="list-empty" id="emptyLog">系统就绪，暂无记录</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <div class="section full-span">
+        <div class="section-hd">实时趋势
+            <div class="hd-right"><button id="chartTypeBtn" class="chart-toggle" onclick="toggleChartType()">柱状图</button></div>
+        </div>
+        <div class="section-bd">
+            <div class="trend-grid">
+                <div class="trend-col">
+                    <div class="trend-title">渠道水位 (mm)</div>
+                    <div class="chart-box"><canvas id="waterChart"></canvas></div>
+                </div>
+                <div class="trend-col">
+                    <div class="trend-title">土壤湿度 (%)</div>
+                    <div class="chart-box"><canvas id="soilChart"></canvas></div>
+                </div>
+            </div>
+            <div style="font-size:12px;color:#7A8A80;font-weight:600;margin-top:18px;margin-bottom:4px;">RORI 风险趋势</div>
+            <div class="chart-box small"><canvas id="roriChart"></canvas></div>
+        </div>
+    </div>
+</div>
+
+<div class="footer">
+    青禾智灌 &copy; 2026
+</div>
+
+<div id="configModal" class="modal-overlay hidden">
+    <div class="modal-box" style="width: 600px;">
+        <div class="modal-hd">
+            <h2 style="font-size:16px;">系统设置</h2>
+            <button style="background:#EDF1EC;border:none;width:26px;height:26px;font-weight:700;cursor:pointer;" onclick="closeModal('configModal')">✕</button>
+        </div>
+        <div class="cfg-row">
+            <label>当前账户</label>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <input type="text" value="{{ username }}" disabled style="flex:1;margin-top:0;">
+                <button type="button" class="btn-link" onclick="openModal('pwdModal')" style="margin-top:0;">修改密码</button>
+            </div>
+        </div>
+        <div class="cfg-row">
+            <label>农场名称</label>
+            <input type="text" id="cfgFarmName" placeholder="如 青禾智慧农场">
+        </div>
+        <div class="cfg-grid">
+            <div class="cfg-row"><label>经度</label><input type="number" step="0.000001" id="cfgFarmLng"></div>
+            <div class="cfg-row"><label>纬度</label><input type="number" step="0.000001" id="cfgFarmLat"></div>
+        </div>
+        <div class="cfg-row">
+            <label>MQTT 接入 Host</label>
+            <input type="text" id="cfgIotHost" placeholder="如 xxxxxxxxxxxxxx.cn-north-4.myhuaweicloud.com">
+        </div>
+        <div class="cfg-grid">
+            <div class="cfg-row"><label>客户端设备 ID</label><input type="text" id="cfgIotDeviceId" placeholder="如 xxxxxxxxxx_client"></div>
+            <div class="cfg-row"><label>田间设备 ID</label><input type="text" id="cfgTargetDeviceId" placeholder="如 xxxxxxxxxx_ESP32-E"></div>
+        </div>
+        <div class="cfg-grid">
+            <div class="cfg-row"><label>MQTT Client ID</label><input type="text" id="cfgIotClientId" placeholder="如 xxxxxxxxxx_client_0_0_2026xxxxxx"></div>
+            <div class="cfg-row"><label>MQTT User</label><input type="text" id="cfgIotUser" placeholder="如 xxxxxxxxxx_client"></div>
+        </div>
+        <div class="cfg-row">
+            <label>MQTT Password</label>
+            <input type="password" id="cfgIotPass">
+        </div>
+        <div class="cfg-row">
+            <label>M2M 数据转发 Topic（默认：/esp32e/data）</label>
+            <input type="text" id="cfgM2mTopic" placeholder="如 /esp32e/data">
+        </div>
+        <div class="cfg-row">
+            <label>命令下行转发 Topic（默认：/esp32e/cmd）</label>
+            <input type="text" id="cfgCmdTopic" placeholder="如 /esp32e/cmd">
+        </div>
+        <div class="cfg-row">
+            <label>降雨量预测模型平台接口</label>
+            <input type="text" id="cfgWeatherDomain" placeholder="如 xxxxxxxxxx.re.qweatherapi.com">
+        </div>
+        <div class="cfg-row">
+            <label>Weather API Key</label>
+            <input type="text" id="cfgWeatherKey">
+        </div>
+        <div class="cfg-row">
+            <label>AI助手接口</label>
+            <input type="text" id="cfgAiDomain" placeholder="如 https://api.deepseek.com">
+        </div>
+        <div class="cfg-row">
+            <label>AI API Key</label>
+            <input type="password" id="cfgAiKey">
+        </div>
+        <div class="cfg-row">
+            <label>钉钉Webhook告警URL</label>
+            <input type="text" id="cfgWebhookUrl" placeholder="https://oapi.dingtalk.com/robot/send?access_token=...">
+        </div>
+        <div class="cfg-actions">
+            <button class="btn-wide" style="background:#3B6B4A;color:white;" onclick="saveConfig()">保存设置</button>
+            <button class="btn-wide btn-danger" style="color:white;border:none;" onclick="window.location.href='/api/logout'">退出登录</button>
+        </div>
+    </div>
+</div>
+
+<div id="pwdModal" class="modal-overlay hidden">
+    <div class="modal-box" style="width: 420px;">
+        <div class="modal-hd">
+            <h2 style="font-size:16px;">修改密码</h2>
+            <button style="background:#EDF1EC;border:none;width:26px;height:26px;font-weight:700;cursor:pointer;" onclick="closeModal('pwdModal')">✕</button>
+        </div>
+        <div class="cfg-row">
+            <label>原密码</label>
+            <input type="password" id="oldPassword" placeholder="请输入原密码">
+        </div>
+        <div class="cfg-row">
+            <label>新密码</label>
+            <input type="password" id="newPassword" placeholder="请输入新密码">
+        </div>
+        <div class="cfg-row">
+            <label>确认新密码</label>
+            <input type="password" id="confirmPassword" placeholder="请再次输入新密码">
+        </div>
+        <div class="cfg-actions">
+            <button class="btn-wide" style="background:#3B6B4A;color:white;" onclick="changePassword()">确认修改</button>
+            <button class="btn-wide" style="background:#E8EDE9;color:#55665C;border:none;" onclick="closeModal('pwdModal')">取消</button>
+        </div>
+    </div>
+</div>
+
+<div id="chatModal" class="modal-overlay hidden">
+    <div class="modal-box ai-chat-box">
+        <div class="modal-hd">
+            <h2 style="font-size:16px;">AI助手</h2>
+            <button style="background:#D0C8BE;border:none;width:26px;height:26px;font-weight:700;cursor:pointer;" onclick="closeModal('chatModal')">✕</button>
+        </div>
+        <div class="chat-history" id="chatHistory">
+            <div class="chat-bubble chat-ai">我是青禾智灌农业水利工程AI专家，关于灌溉调控、设备操作的问题，可以在这里向我提问，我会尽量帮你解答。</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chatInput" placeholder="输入问题..." onkeypress="if(event.key==='Enter') sendChat();">
+            <button class="btn btn-on" onclick="sendChat()" style="padding:9px 16px;">发送</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    var currentWaterLevel = 0;    // 水位，mm
+    var currentSoilMoisture = 58.0;   // 土壤湿度，%
+    var waterAdc = 0;  // 水位 ADC 原始值
+    var soilAdc = 0;   // 土壤 ADC 原始值
+    var doValue = 0;   // 根区溶解氧含量，mg/L
+    var ehValue = 0;   // 根区氧化还原电位，mV
+    var manualMode = false;
+    var config = {};
+    var cloudConnected = false;
+    var deviceOnline = false;
+    var dataReceived = false;
+    var socket;
+    // 图表和告警的状态
+    var waterChart = null, soilChart = null, roriChart = null;
+    var trendData = [];
+    var roriTrendData = [];
+    var chartUpdateTimer = null;
+    var chartType = 'line';
+    var alertCoolDown = {};
+    var pumpAutoState = '';
+    var airPumpAutoState = '';
+
+    function toggleChartType() {
+        chartType = (chartType === 'line') ? 'bar' : 'line';
+        document.getElementById('chartTypeBtn').innerText = (chartType === 'bar') ? '折线图' : '柱状图';
+        if (waterChart) waterChart.config.type = chartType;
+        if (soilChart) soilChart.config.type = chartType;
+        if (roriChart) roriChart.config.type = chartType;
+        if (waterChart) waterChart.update();
+        if (soilChart) soilChart.update();
+        if (roriChart) roriChart.update();
+    }
+
+    function toast(msg, type) {
+        const box = document.getElementById("toastContainer");
+        const el = document.createElement("div");
+        el.className = "toast " + (type || "success");
+        el.innerText = msg;
+        box.appendChild(el);
+        setTimeout(() => { el.style.opacity = "0"; el.style.transition = "opacity 0.3s"; }, 3000);
+        setTimeout(() => el.remove(), 3400);
+    }
+
+    function fmtTime(ts) {
+        const d = new Date(ts);
+        return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+    }
+
+    // 阈值越限与告警检测
+    function checkAlerts() {
+        if (!deviceOnline) return;
+        const items = [];
+        const now = Date.now();
+        // 水位阈值（渠道水位 mm）
+        const wlDown = parseInt(document.getElementById('waterlevelDownInput').value) || 30;
+        const wlUp = parseInt(document.getElementById('waterlevelUpInput').value) || 150;
+        // 土壤湿度阈值（%RH）—— 与降雨前馈动态阈值融合
+        const dt = computeDynamicThreshold();
+        const humiDown = dt.hasForecast ? dt.effLower : (parseInt(document.getElementById('humiDownInput').value) || 40);
+        const humiUp = dt.hasForecast ? dt.effUpper : (parseInt(document.getElementById('humiUpInput').value) || 80);
+        const soil = parseFloat(currentSoilMoisture) || 0;
+        const water = parseFloat(currentWaterLevel) || 0;
+
+        if (soil < humiDown) items.push({ level: 'warn', msg: `土壤湿度过低 ${soil}% < 动态下限 ${humiDown.toFixed(1)}%${dt.rainComing ? '（降雨前馈控水等雨）' : ''}，建议补灌` });
+        else if (soil > humiUp) items.push({ level: 'warn', msg: `土壤湿度过高 ${soil}% > 动态上限 ${humiUp.toFixed(1)}%，注意排湿` });
+        if (water > wlUp) items.push({ level: 'warn', msg: `水位过高 ${water}mm > 上限 ${wlUp}mm，注意排水` });
+
+        // RORI 预警
+        const rori = parseFloat(document.getElementById('roriDisplay').innerText) || 0;
+        if (rori >= 70) items.push({ level: 'danger', msg: `RORI ${rori.toFixed(0)} 重度厌氧，强制增氧` });
+        else if (rori >= 40) items.push({ level: 'warn', msg: `RORI ${rori.toFixed(0)} 中度缺氧，脉冲加气` });
+
+        items.forEach(it => {
+            const key = it.msg;
+            if (alertCoolDown[key] && now - alertCoolDown[key] < 60000) return;
+            alertCoolDown[key] = now;
+            recordAlert(it.level, it.msg);
+        });
+    }
+
+    function recordAlert(level, msg) {
+        const list = JSON.parse(localStorage.getItem('farmAlerts') || '[]');
+        list.unshift({ time: Date.now(), level, msg });
+        // 只保留最近 24 小时
+        const cutoff = Date.now() - 24 * 3600 * 1000;
+        const trimmed = list.filter(a => a.time >= cutoff);
+        if (trimmed.length > 100) trimmed.length = 100;
+        localStorage.setItem('farmAlerts', JSON.stringify(trimmed));
+        renderAlerts();
+        toast('⚠ ' + msg, level);
+        // 通过后端转发到用户配置的 webhook（钉钉/企业微信等）
+        try {
+            fetch('/api/notify_alert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ level, msg })
+            }).catch(() => {});
+        } catch (e) {}
+    }
+
+    function renderAlerts() {
+        const list = JSON.parse(localStorage.getItem('farmAlerts') || '[]');
+        // 渲染时也过滤 24 小时内
+        const cutoff = Date.now() - 24 * 3600 * 1000;
+        const filtered = list.filter(a => a.time >= cutoff);
+        const box = document.getElementById('alertList');
+        if (!filtered.length) {
+            box.innerHTML = '<div class="list-empty">暂无告警记录</div>';
+            return;
+        }
+        box.innerHTML = filtered.slice(0, 50).map(a => `
+            <div class="alert-item ${a.level === 'danger' ? 'level-danger' : 'level-warn'}">
+                <div class="alert-time">${fmtTime(a.time)}</div>
+                <div class="alert-msg">${esc(a.msg)}</div>
+            </div>`).join('');
+    }
+
+    // ===== 图表初始化 =====
+    function initCharts() {
+        if (typeof Chart === 'undefined') return;
+        Chart.defaults.font.family = '"Microsoft YaHei", sans-serif';
+        Chart.defaults.color = '#6B7A72';
+        const ctxW = document.getElementById('waterChart').getContext('2d');
+        waterChart = new Chart(ctxW, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: '水位 (mm)', data: [], borderColor: '#2E7D8C', backgroundColor: 'rgba(46,125,140,0.12)', tension: 0.3, fill: true, pointRadius: 0, borderWidth: 2 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    y: { position: 'left', min: 0, title: { display: true, text: 'mm' } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+        const ctxS = document.getElementById('soilChart').getContext('2d');
+        soilChart = new Chart(ctxS, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    { label: '土壤湿度 (%)', data: [], borderColor: '#1F6B45', backgroundColor: 'rgba(31,107,69,0.12)', tension: 0.3, fill: true, pointRadius: 0, borderWidth: 2 }
+                ]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    y: { position: 'left', min: 0, max: 100, title: { display: true, text: '%' } }
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+        const ctx2 = document.getElementById('roriChart').getContext('2d');
+        roriChart = new Chart(ctx2, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'RORI', data: [], borderColor: '#E8A33D', backgroundColor: 'rgba(232,163,61,0.12)',
+                    tension: 0.3, fill: true, pointRadius: 0, borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                animation: false,
+                scales: { y: { min: 0, max: 100, title: { display: true, text: '指数' } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    // 本地趋势存储：最近 3 天、1 分钟一条
+    var TREND_STORE_KEY = 'farmTrend';
+    var TREND_STORE_RORI_KEY = 'farmTrendRori';
+    var TREND_KEEP_MS = 3 * 24 * 3600 * 1000;  // 3 天
+
+    // 写本地：水位/湿度 与 RORI 分开存（按分钟桶去重 + 裁剪最近 3 天）
+    function saveTrendStore() {
+        try {
+            const cutoff = Date.now() - TREND_KEEP_MS;
+            const wm = new Map();
+            trendData.forEach(p => wm.set(Math.floor(p.ts / 60000) * 60000, { ts: p.ts, water: p.water, soil: p.soil }));
+            localStorage.setItem(TREND_STORE_KEY, JSON.stringify(
+                [...wm.values()].filter(p => p.ts >= cutoff).sort((a, b) => a.ts - b.ts)
+            ));
+            const rm = new Map();
+            roriTrendData.forEach(p => rm.set(Math.floor(p.ts / 60000) * 60000, { ts: p.ts, rori: p.rori }));
+            localStorage.setItem(TREND_STORE_RORI_KEY, JSON.stringify(
+                [...rm.values()].filter(p => p.ts >= cutoff).sort((a, b) => a.ts - b.ts)
+            ));
+        } catch (e) { /* 存储满等异常忽略 */ }
+    }
+
+    // 读本地：过滤最近 3 天
+    function loadTrendStore() {
+        const cutoff = Date.now() - TREND_KEEP_MS;
+        let w = [], r = [];
+        try {
+            const arr = JSON.parse(localStorage.getItem(TREND_STORE_KEY) || '[]');
+            if (Array.isArray(arr)) {
+                // 过滤默认值假点（water=0 且 soil=58 是设备离线时页面默认值产生的）
+                w = arr.filter(p => p && p.ts >= cutoff && !(p.water === 0 && p.soil === 58));
+            }
+        } catch (e) {}
+        try {
+            const arr = JSON.parse(localStorage.getItem(TREND_STORE_RORI_KEY) || '[]');
+            if (Array.isArray(arr)) {
+                // 用有效水位点的时间桶集合过滤 RORI：离线假点是同一时刻一起写入的
+                const validBuckets = new Set(w.map(p => Math.floor(p.ts / 60000)));
+                r = arr.filter(p => p && p.ts >= cutoff && validBuckets.has(Math.floor(p.ts / 60000)));
+            }
+        } catch (e) {}
+        return { water: w, rori: r };
+    }
+
+    function pushChartPoint() {
+        if (!waterChart || !soilChart) return;
+        // 只有真正收到过传感器数据才写入趋势，避免设备离线时用默认值/空值产生假点
+        if (!dataReceived || !cloudConnected || !deviceOnline) return;
+        const now = Date.now();
+        trendData.push({ ts: now, water: parseFloat(currentWaterLevel) || 0, soil: parseFloat(currentSoilMoisture) || 0 });
+        const rori = parseFloat(document.getElementById('roriDisplay').innerText) || 0;
+        roriTrendData.push({ ts: now, rori });
+        saveTrendStore();
+        if (chartUpdateTimer) return;
+        chartUpdateTimer = setTimeout(() => {
+            chartUpdateTimer = null;
+            renderTrendCharts();
+        }, 2000);
+    }
+
+    // 横轴标签：相邻点跨天时，在新一天的点上标出日期（MM-DD HH:MM）
+    function fmtAxisLabel(ts, prevTs) {
+        const d = new Date(ts);
+        const hm = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        const pd = new Date(prevTs);
+        const sameDay = pd.getFullYear() === d.getFullYear() && pd.getMonth() === d.getMonth() && pd.getDate() === d.getDate();
+        return sameDay ? hm : `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${hm}`;
+    }
+
+    function axisLabels(list) {
+        return list.map((p, i) => fmtAxisLabel(p.ts, list[Math.max(0, i-1)].ts));
+    }
+
+    // 渲染趋势图：数据多时抽样，避免点过密
+    function renderTrendCharts() {
+        const maxPoints = 300;
+        function sample(arr) {
+            if (arr.length <= maxPoints) return arr;
+            const step = Math.ceil(arr.length / maxPoints);
+            return arr.filter((_, i) => i % step === 0);
+        }
+        const sw = sample(trendData);
+        const sr = sample(roriTrendData);
+        const labels = axisLabels(sw);
+        waterChart.data.labels = labels;
+        waterChart.data.datasets[0].data = sw.map(d => d.water);
+        waterChart.update();
+        soilChart.data.labels = labels;
+        soilChart.data.datasets[0].data = sw.map(d => d.soil);
+        soilChart.update();
+        roriChart.data.labels = axisLabels(sr);
+        roriChart.data.datasets[0].data = sr.map(d => d.rori);
+        roriChart.update();
+    }
+
+    function loadHistory() {
+        // 优先本地 3 天趋势
+        const local = loadTrendStore();
+        if (local.water.length > 0) {
+            trendData = local.water;
+            roriTrendData = local.rori;
+            renderTrendCharts();
+            return;
+        }
+        // 本地无数据：兜底拉服务端历史
+        fetch('/api/history?limit=500').then(r => r.json()).then(d => {
+            if (!d.data || !d.data.length) return;
+            const step = Math.max(1, Math.floor(d.data.length / 300));
+            const sampled = d.data.filter((_, i) => i % step === 0);
+            const pts = sampled.map(h => ({
+                water: Math.round(h.water_adc / 4095 * 300),
+                soil: Math.max(0, Math.min(Math.round((4095 - h.soil_adc) / 4095 * 100), 100))
+            }));
+            trendData = pts.map((p, i) => ({ ts: (d.data[i].ts || Date.now()), water: p.water, soil: p.soil }));
+            // RORI 趋势从历史 ADC 计算
+            roriTrendData = sampled.map(h => ({ ts: h.ts, rori: computeRori(h.water_adc, h.soil_adc) }));
+            saveTrendStore();
+            renderTrendCharts();
+        }).catch(() => {});
+    }
+
+    function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+    function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+    function refreshStatus() {
+        const cloudEl = document.getElementById("cloudStatus");
+        cloudEl.innerHTML = cloudConnected ? '<span class="status-dot dot-green"></span>华为云：已连接' : '<span class="status-dot dot-red"></span>华为云：未连接';
+
+        const deviceEl = document.getElementById("deviceStatusPill");
+        deviceEl.innerHTML = deviceOnline ? '<span class="status-dot dot-green"></span>传感器：已连接' : '<span class="status-dot dot-red"></span>传感器：未连接';
+
+        const sensorPanel = document.getElementById("sensorPanel");
+        const controlPanel = document.getElementById("controlPanel");
+
+        // 面板可用性：socket 已连接即可操作（命令经 MQTT 真实下发到设备）
+        const wsConnected = !!(socket && socket.connected);
+        if (cloudConnected && deviceOnline) {
+            sensorPanel.classList.remove("panel-disabled");
+            controlPanel.classList.remove("panel-disabled");
+            document.getElementById("roriStatus").innerText = "数据同步计算中...";
+        } else if (wsConnected) {
+            sensorPanel.classList.remove("panel-disabled");
+            controlPanel.classList.remove("panel-disabled");
+            document.getElementById("roriStatus").innerText = "设备未连接，等待 MQTT 数据";
+        } else {
+            sensorPanel.classList.add("panel-disabled");
+            controlPanel.classList.add("panel-disabled");
+            document.getElementById("waterDisplay").innerText = "--";
+            document.getElementById("soilDisplay").innerText = "--";
+            document.getElementById("doDisplay").innerText = "--";
+            document.getElementById("ehDisplay").innerText = "--";
+            document.getElementById("deviceStatus").innerText = "无信号";
+            document.getElementById("waterPumpStatus").innerText = "无信号";
+            document.getElementById("roriDisplay").innerText = "--";
+            document.getElementById("roriStatus").innerText = "设备离线";
+            document.getElementById("ongoingAlertBanner").classList.add("hidden");
+        }
+    }
+
+    // 在线检测增加冗余：连续多次无数据才判离线，单次/偶发丢包不误判。
+    // 阈值 4 次 ≈ 40s 无数据才离线（ESP32 每 3s 上报一次）。
+    var heartbeatMiss = 0;
+    var HEARTBEAT_MISS_LIMIT = 4;
+    function watchHeartbeat() {
+        setInterval(() => {
+            if (dataReceived) {
+                heartbeatMiss = 0;
+                deviceOnline = true;
+                dataReceived = false;
+            } else {
+                heartbeatMiss += 1;
+                if (heartbeatMiss >= HEARTBEAT_MISS_LIMIT) {
+                    deviceOnline = false;
+                }
+            }
+            refreshStatus();
+        }, 10000);
+    }
+
+    function onHumiditySlider(type) {
+        const d = document.getElementById('humiDownInput');
+        const u = document.getElementById('humiUpInput');
+        let dv = parseInt(d.value);
+        let uv = parseInt(u.value);
+        if (type === 'down' && dv > uv) { d.value = uv; dv = uv; }
+        if (type === 'up' && uv < dv) { u.value = dv; uv = dv; }
+        document.getElementById('humiDownVal').innerText = d.value;
+        document.getElementById('humiUpVal').innerText = u.value;
+        updateThresholdFusionHint();
+    }
+
+    function onWaterLevelSlider(type) {
+        const d = document.getElementById('waterlevelDownInput');
+        const u = document.getElementById('waterlevelUpInput');
+        let dv = parseInt(d.value);
+        let uv = parseInt(u.value);
+        if (type === 'down' && dv > uv) { d.value = uv; dv = uv; }
+        if (type === 'up' && uv < dv) { u.value = dv; uv = dv; }
+        document.getElementById('waterlevelDownVal').innerText = d.value;
+        document.getElementById('waterlevelUpVal').innerText = u.value;
+        updateThresholdFusionHint();
+    }
+
+    function loadConfig() {
+        fetch('/api/get_config').then(r => r.json()).then(data => {
+            if(data.error) return;
+            config = data;
+            document.getElementById('cfgFarmLng').value = data.farm_lng || '';
+            document.getElementById('cfgFarmLat').value = data.farm_lat || '';
+            document.getElementById('cfgFarmName').value = data.farm_name || '';
+            document.getElementById('cfgIotHost').value = data.iot_host || '';
+            document.getElementById('cfgIotDeviceId').value = data.iot_device_id || '';
+            document.getElementById('cfgTargetDeviceId').value = data.iot_target_device_id || '';
+            document.getElementById('cfgIotClientId').value = data.iot_client_id || '';
+            document.getElementById('cfgIotUser').value = data.iot_user || '';
+            document.getElementById('cfgIotPass').value = data.iot_pass || '';
+            document.getElementById('cfgM2mTopic').value = data.iot_m2m_topic || '/esp32e/data';
+            document.getElementById('cfgCmdTopic').value = data.iot_cmd_topic || '/esp32e/cmd';
+            document.getElementById('cfgWeatherDomain').value = data.weather_domain || '';
+            document.getElementById('cfgWeatherKey').value = data.weather_key || '';
+            document.getElementById('cfgAiDomain').value = data.ai_domain || '';
+            document.getElementById('cfgAiKey').value = data.ai_key || '';
+            document.getElementById('cfgWebhookUrl').value = data.webhook_url || '';
+            fetchWeather();
+            fetchForecast();
+        });
+    }
+
+    function saveConfig() {
+        const payload = {
+            farm_lng: document.getElementById('cfgFarmLng').value,
+            farm_lat: document.getElementById('cfgFarmLat').value,
+            farm_name: document.getElementById('cfgFarmName').value,
+            iot_host: document.getElementById('cfgIotHost').value,
+            iot_device_id: document.getElementById('cfgIotDeviceId').value,
+            iot_target_device_id: document.getElementById('cfgTargetDeviceId').value,
+            iot_client_id: document.getElementById('cfgIotClientId').value,
+            iot_user: document.getElementById('cfgIotUser').value,
+            iot_pass: document.getElementById('cfgIotPass').value,
+            iot_m2m_topic: document.getElementById('cfgM2mTopic').value,
+            iot_cmd_topic: document.getElementById('cfgCmdTopic').value,
+            weather_domain: document.getElementById('cfgWeatherDomain').value,
+            weather_key: document.getElementById('cfgWeatherKey').value,
+            ai_domain: document.getElementById('cfgAiDomain').value,
+            ai_key: document.getElementById('cfgAiKey').value,
+            webhook_url: document.getElementById('cfgWebhookUrl').value
+        };
+
+        fetch('/api/save_config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).then(r => r.json()).then(data => {
+            alert(data.message);
+            if(data.status === 'success') { closeModal('configModal'); loadConfig(); }
+        });
+    }
+
+    function changePassword() {
+        const oldPw = document.getElementById('oldPassword').value;
+        const newPw = document.getElementById('newPassword').value;
+        const confirmPw = document.getElementById('confirmPassword').value;
+        if (!oldPw || !newPw) { alert('请输入原密码与新密码'); return; }
+        if (newPw !== confirmPw) { alert('两次输入的新密码不一致'); return; }
+        fetch('/api/change_password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ old_password: oldPw, new_password: newPw })
+        }).then(r => r.json()).then(data => {
+            alert(data.message);
+            if(data.status === 'success') window.location.href = '/api/logout';
+        });
+    }
+
+    // 页面加载时读取后端保存的阈值与模式设定，恢复到滑块与模式按钮
+    function loadThreshSettings() {
+        fetch('/api/thresh_settings').then(r => r.json()).then(d => {
+            if (d.error) return;
+            document.getElementById('humiDownInput').value = d.humi_down;
+            document.getElementById('humiUpInput').value = d.humi_up;
+            document.getElementById('waterlevelDownInput').value = d.waterlevel_down;
+            document.getElementById('waterlevelUpInput').value = d.waterlevel_up;
+            document.getElementById('humiDownVal').innerText = d.humi_down;
+            document.getElementById('humiUpVal').innerText = d.humi_up;
+            document.getElementById('waterlevelDownVal').innerText = d.waterlevel_down;
+            document.getElementById('waterlevelUpVal').innerText = d.waterlevel_up;
+            updateThresholdFusionHint();
+            // 恢复模式：若后端存的是手动模式，则进入手动状态
+            if (d.manual_mode && !manualMode) {
+                manualMode = true;
+                document.getElementById("manualControlGroup").classList.remove("control-group-disabled");
+                document.getElementById("autoThresholdArea").classList.remove("control-group-disabled");
+                document.getElementById("modeToggleBtn").innerText = "切换至 全自动接管模式";
+                document.getElementById("modeToggleBtn").style.backgroundColor = "#3B6B4A";
+            }
+        }).catch(() => {});
+    }
+
+    function saveMode() {
+        fetch('/api/thresh_settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                humi_down: parseInt(document.getElementById("humiDownInput").value) || 40,
+                humi_up: parseInt(document.getElementById("humiUpInput").value) || 80,
+                waterlevel_down: parseInt(document.getElementById("waterlevelDownInput").value) || 30,
+                waterlevel_up: parseInt(document.getElementById("waterlevelUpInput").value) || 150,
+                manual_mode: manualMode ? 1 : 0
+            })
+        }).catch(() => {});
+    }
+
+    function toggleMode() {
+        manualMode = !manualMode;
+        const groupEl = document.getElementById("manualControlGroup");
+        const threshEl = document.getElementById("autoThresholdArea");
+        const btnEl = document.getElementById("modeToggleBtn");
+        if (manualMode) {
+            groupEl.classList.remove("control-group-disabled");
+            threshEl.classList.remove("control-group-disabled");
+            btnEl.innerText = "切换至 全自动接管模式";
+            btnEl.style.backgroundColor = "#3B6B4A";
+            addLog("系统已切换至【手动调控模式】", "log-info");
+        } else {
+            groupEl.classList.add("control-group-disabled");
+            threshEl.classList.add("control-group-disabled");
+            btnEl.innerText = "切换至 手动接管模式";
+            btnEl.style.backgroundColor = "#C8903F";
+            addLog("系统已恢复【自动智能调控模式】", "log-safe");
+            // 重置自动状态去重标记，让自动逻辑重新按当前 RORI/水位把泵调到应有状态
+            airPumpAutoState = '';
+            pumpAutoState = '';
+            updateRori();
+        }
+        saveMode();
+    }
+
+    function applyThresholds() {
+        const humiUp = parseInt(document.getElementById("humiUpInput").value) || 80;
+        const humiDown = parseInt(document.getElementById("humiDownInput").value) || 40;
+        const wlUp = parseInt(document.getElementById("waterlevelUpInput").value) || 150;
+        const wlDown = parseInt(document.getElementById("waterlevelDownInput").value) || 30;
+
+        // 阈值保存在后端，供自动调控逻辑使用（刷新不丢、跨端共享），不做设备下发
+        fetch('/api/thresh_settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                humi_down: humiDown, humi_up: humiUp,
+                waterlevel_down: wlDown, waterlevel_up: wlUp,
+                manual_mode: manualMode ? 1 : 0
+            })
+        }).then(r => r.json()).then(data => {
+            addLog(`[阈值保存] 湿度: ${humiDown}% ~ ${humiUp}% | 水位: ${wlDown}mm ~ ${wlUp}mm`, "log-info");
+            alert(`设定已保存！\n湿度阈值: ${humiDown}% ~ ${humiUp}%\n水位阈值: ${wlDown}mm ~ ${wlUp}mm`);
+            // 保存后按当前数据重新评估自动调控
+            updateRori();
+        }).catch(() => {
+            alert("保存失败，请检查后端是否在线");
+        });
+    }
+
+    async function sendChat() {
+        const inputEl = document.getElementById('chatInput');
+        const msg = inputEl.value.trim();
+        if(!msg) return;
+
+        const history = document.getElementById('chatHistory');
+        const userDiv = document.createElement('div');
+        userDiv.className = 'chat-bubble chat-user';
+        userDiv.innerText = msg;
+        history.appendChild(userDiv);
+        inputEl.value = '';
+
+        const aiDiv = document.createElement('div');
+        aiDiv.className = 'chat-bubble chat-ai';
+        aiDiv.innerText = '正在处理...';
+        history.appendChild(aiDiv);
+        history.scrollTop = history.scrollHeight;
+
+        try {
+            const res = await fetch('/api/ai_chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: msg })
+            });
+            const data = await res.json();
+            if(data.choices && data.choices.length > 0) {
+                aiDiv.innerText = data.choices[0].message.content;
+            } else {
+                aiDiv.innerText = "数据返回异常";
+            }
+        } catch(e) {
+            aiDiv.innerText = "连接网络失败";
+        }
+        history.scrollTop = history.scrollHeight;
+    }
+
+    function startClock() {
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById("sysDate").innerText = `${now.getFullYear()}年${String(now.getMonth() + 1).padStart(2, '0')}月${String(now.getDate()).padStart(2, '0')}日`;
+            document.getElementById("sysTime").innerText = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+        }, 1000);
+    }
+
+    function fetchWeatherData(latNum, lonNum) {
+        // 当前气象（Open-Meteo，免 Key、跨域友好）
+        fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latNum}&longitude=${lonNum}&current=temperature_2m,relative_humidity_2m&timezone=Asia%2FShanghai`)
+            .then(r => r.json()).then(d => {
+                if (d.current) {
+                    document.getElementById("tempDisplay").innerText = d.current.temperature_2m + "°C";
+                    document.getElementById("humidityDisplay").innerText = d.current.relative_humidity_2m;
+                }
+            });
+    }
+
+    function fetchWeather() {
+        const lng = config.farm_lng;
+        const lat = config.farm_lat;
+        const locDisplay = document.getElementById("locDisplay");
+        const locSubDisplay = document.getElementById("locSubDisplay");
+        const farmName = (config && config.farm_name) ? String(config.farm_name).trim() : '';
+
+        // 未配置经纬度：直接显示农场名称（来自设置），不显示坐标
+        if (!lng || !lat) {
+            locDisplay.innerText = farmName || '未命名农场';
+            locSubDisplay.innerText = '';
+            return;
+        }
+        const lonNum = parseFloat(lng);
+        const latNum = parseFloat(lat);
+        const coordText = `E: ${lonNum.toFixed(2)}°, N: ${latNum.toFixed(2)}°`;
+
+        // 已设置农场名称：主显示农场名，副显示经纬度（主副不重复显示坐标）
+        if (farmName) {
+            locDisplay.innerText = farmName;
+            locSubDisplay.innerText = coordText;
+            fetchWeatherData(latNum, lonNum);
+            return;
+        }
+
+        // 未设置农场名称：主显示具体位置（反查地名），副显示经纬度；
+        // 反查失败时主行保持“位置解析中…”，不把坐标回填主行，避免主副重复显示坐标
+        locSubDisplay.innerText = coordText;
+        locDisplay.innerText = '位置解析中…';
+        fetchWeatherData(latNum, lonNum);
+        const cacheKey = 'loc_' + latNum.toFixed(4) + '_' + lonNum.toFixed(4);
+        let cachedName = '';
+        try { cachedName = localStorage.getItem(cacheKey) || ''; } catch (e) {}
+        if (cachedName) locDisplay.innerText = cachedName;
+        fetch(`/api/reverse_geocode?lat=${latNum}&lng=${lonNum}`)
+            .then(r => r.json()).then(d => {
+                const name = (d && d.name) ? d.name : '';
+                if (name && name !== coordText) {
+                    locDisplay.innerText = name;
+                    try { localStorage.setItem(cacheKey, name); } catch (e) {}
+                }
+            })
+            .catch(() => {
+                if (!cachedName) locDisplay.innerText = '具体位置暂不可用';
+            });
+    }
+
+    // ===== 降雨前馈动态阈值（说明书 3.3 节）=====
+    // P6d = Σ(t=1..6) ω_t·P_t，时间衰减权重
+    var RAIN_WEIGHTS = [1.0, 0.9, 0.7, 0.5, 0.4, 0.3];
+    var H_ROOT = 200;            // 核心活动根系层厚度(mm)
+
+    function computeDynamicThreshold() {
+        var fc = (typeof window.forecastData !== 'undefined' && window.forecastData) || [];
+        var P6d = 0;
+        for (var i = 0; i < fc.length && i < RAIN_WEIGHTS.length; i++) {
+            P6d += RAIN_WEIGHTS[i] * (parseFloat(fc[i].precip) || 0);
+        }
+        // 动态降雨有效利用系数 α 分段定界
+        var alpha = P6d <= 10 ? 0.95 : (P6d <= 50 ? 0.75 : 0.45);
+        var humiDown = parseInt(document.getElementById('humiDownInput').value) || 40;
+        var humiUp = parseInt(document.getElementById('humiUpInput').value) || 80;
+        // 前馈控水等雨：预测有雨则下调灌溉触发下限（限位 45% 防枯萎保底）
+        var effLower = Math.max(45, humiDown - (alpha * P6d / H_ROOT) * 100);
+        // 蓄雨型控灌：强降雨前馈(P6d≥15mm)放宽蓄水上限
+        var effUpper = (P6d >= 15) ? Math.min(100, humiUp + 15) : humiUp;
+        return {
+            P6d: P6d, alpha: alpha, effLower: effLower, effUpper: effUpper,
+            baseLower: humiDown, baseUpper: humiUp,
+            hasForecast: fc.length > 0, rainComing: P6d > 0
+        };
+    }
+
+    function updateThresholdFusionHint() {
+        var hint = document.getElementById('thresholdFusionHint');
+        if (!hint) return;
+        var dt = computeDynamicThreshold();
+        if (!dt.hasForecast) { hint.style.display = 'none'; return; }
+        hint.style.display = 'block';
+        hint.innerHTML = dt.rainComing
+            ? `降雨前馈：6日降雨 <b>P6d=${dt.P6d.toFixed(1)}mm</b>，α=<b>${dt.alpha}</b>；动态土壤湿度阈值 下限 <b>${dt.effLower.toFixed(1)}%</b> / 上限 <b>${dt.effUpper.toFixed(1)}%</b>，已与 RORI 风险联动。`
+            : `无降雨前馈：阈值维持 下限 ${dt.baseLower}% / 上限 ${dt.baseUpper}%。`;
+    }
+
+    function fetchForecast() {
+        const gridEl = document.getElementById("forecastGrid");
+        if (!config || !config.weather_key) {
+            gridEl.innerHTML = `<div class="fc-empty" style="color:#B84A4A;">未配置天气 API Key，请在设置中填写</div>`;
+            return;
+        }
+        const lng = config.farm_lng || '118.78';
+        const lat = config.farm_lat || '31.90';
+        const domain = config.weather_domain || 'm767cfpjh7.re.qweatherapi.com';
+        gridEl.innerHTML = `<div class="fc-empty">模型加载中...</div>`;
+        // 通过后端代理请求，避免前端跨域与 CSP 拦截
+        fetch(`/api/forecast?lng=${encodeURIComponent(lng)}&lat=${encodeURIComponent(lat)}`)
+            .then(r => r.json())
+            .then(d => {
+                if (!d || d.code !== "200" || !d.daily) {
+                    gridEl.innerHTML = `<div class="fc-empty" style="color:#B84A4A;">${esc((d && d.error) ? d.error : '天气接口返回异常，请检查 API Key/域名')}</div>`;
+                    return;
+                }
+                window.forecastData = d.daily.slice(1, 7);
+                gridEl.innerHTML = "";
+                d.daily.slice(1, 7).forEach(day => {
+                    const precip = parseFloat(day.precip);
+                    const displayDate = day.fxDate.includes("-") ? day.fxDate.substring(5) : day.fxDate;
+                    gridEl.innerHTML += `<div class="fc-item"><div class="fc-date">${esc(displayDate)}</div><div class="fc-value">${precip.toFixed(1)} <span class="unit">mm</span></div><div class="fc-tag">预报降雨</div></div>`;
+                });
+                // 降雨前馈动态阈值（说明书 3.3）
+                const dt = computeDynamicThreshold();
+                window.dynamicThreshold = dt;
+                const summary = document.getElementById("forecastSummary");
+                if (summary) {
+                    summary.style.display = "block";
+                    summary.innerHTML = `6日滚动降雨 <b>P6d = ${dt.P6d.toFixed(1)} mm</b>，衰减系数 <b>α = ${dt.alpha}</b>；`
+                        + `动态土壤湿度阈值：下限 <b>${dt.effLower.toFixed(1)}%</b>（基础 ${dt.baseLower}%）`
+                        + (dt.effUpper > dt.baseUpper ? ` / 上限 <b>${dt.effUpper.toFixed(1)}%</b>（蓄雨放宽）` : ` / 上限 ${dt.effUpper}%`)
+                        + (dt.rainComing ? '；<span style="color:#2E7D8C;">降雨前馈：暂缓补水、留存天然降雨</span>' : '；当前无降雨前馈');
+                }
+                updateThresholdFusionHint();
+            })
+            .catch(err => {
+                gridEl.innerHTML = `<div class="fc-empty" style="color:#B84A4A;">天气接口请求失败，请检查网络或稍后重试</div>`;
+            });
+    }
+
+    // RORI 融合计算 —— 说明书 3.1~3.2 节
+    // 子风险因子：SEh(氧化还原电位)、SDO(溶解氧)、Risk_water(水位)、Risk_soil(土壤湿润)
+    // 边缘网关实时采集 Eh / DO 传感器，以下按说明书 3.1.1 / 3.1.2 公式使用实时读数。
+    function computeRori(waterAdc, soilAdc) {
+        var W_EH = 0.35, W_DO = 0.35, W_WATER_SOIL = 0.30, GAMMA = 0.5;
+
+        // 原始 ADC -> 物理量：水位 mm（满程 4095≈300mm）、土壤湿润度 %RH
+        var waterMm = Math.max(0, Math.min(waterAdc / 4095 * 300, 300));
+        var soilPct = Math.max(0, Math.min((4095 - soilAdc) / 4095 * 100, 100));
+
+        // 3.1.1 氧化还原电位风险因子 SEh = clamp(0,1, (Ehmax-Eh)/(Ehmax-Ehmin))，Ehmax=300mV, Ehmin=-150mV
+        var sEh = Math.max(0, Math.min((300 - ehValue) / 450, 1.0));
+        // 3.1.2 根区溶解氧风险因子 SDO = clamp(0,1, (DOmax-DO)/(DOmax-DOmin))，DOmax=8.0mg/L, DOmin=0
+        var sDo = Math.max(0, Math.min((8.0 - doValue) / 8.0, 1.0));
+        // 3.1.3 水位风险：WaterA0>5mm 时 (WaterA0-5)/100，否则 0
+        var riskWater = waterMm > 5 ? Math.max(0, Math.min((waterMm - 5) / 100, 1.0)) : 0;
+        // 3.1.3 土壤风险：越湿润（ADC 越低 / %RH 越高）缺氧风险越高 -> %RH/100
+        var riskSoil = Math.max(0, Math.min(soilPct / 100, 1.0));
+
+        // 3.2 RORI 多维融合
+        var pRisk = W_EH * sEh + W_DO * sDo
+                  + W_WATER_SOIL * Math.max(riskWater, riskSoil)
+                  + GAMMA * riskWater * riskSoil;
+        return Math.max(0, Math.min(pRisk, 1.0)) * 100;
+    }
+
+    function classifyRori(rori) {
+        // 表3-1：RORI≥70 重度 / 40≤RORI<70 中度 / RORI<40 安全
+        if (rori >= 70) return { code: 2, name: "重度厌氧", strategy: "重度厌氧预警，加气机全满载强制增氧" };
+        if (rori >= 40) return { code: 1, name: "中度缺氧", strategy: "根区微量缺氧，周期性脉冲加气补氧" };
+        return { code: 0, name: "安全运行", strategy: "根区有氧环境优良，加气机低耗待机" };
+    }
+
+    function updateRori() {
+        if(!cloudConnected || !deviceOnline) {
+            document.getElementById("roriDisplay").innerText = "--";
+            document.getElementById("roriStatus").innerText = "设备离线";
+            return;
+        }
+        var roriValue = computeRori(waterAdc, soilAdc);
+        var level = classifyRori(roriValue);
+
+        var roriEl = document.getElementById("roriDisplay");
+        var statusEl = document.getElementById("roriStatus");
+        var alertBanner = document.getElementById("ongoingAlertBanner");
+        roriEl.innerText = roriValue.toFixed(2);
+        var levelName = level.name, cmdCode = level.code, strategy = level.strategy;
+
+        if (cmdCode >= 2) { roriEl.style.color = "#B84A4A"; statusEl.style.color = "#B84A4A"; }
+        else if (cmdCode >= 1) { roriEl.style.color = "#C8903F"; statusEl.style.color = "#C8903F"; }
+        else { roriEl.style.color = "#1F6B45"; statusEl.style.color = "#6B7A72"; }
+
+        statusEl.innerHTML = `${levelName}<br><span style='font-size:12px;font-weight:400;'>${strategy}</span>`;
+
+        if (cmdCode > 0) {
+            alertBanner.innerText = `RORI 预警：当前【${levelName}】，${strategy}`;
+            alertBanner.classList.remove("hidden");
+            alertBanner.style.backgroundColor = (cmdCode === 2) ? "#B84A4A" : "#C8903F";
+        } else if (alertBanner.innerText.includes("RORI")) {
+            alertBanner.classList.add("hidden");
+        }
+
+        if (!manualMode) {
+            // 降雨前馈动态阈值（说明书 3.3）
+            var dt = computeDynamicThreshold();
+
+            // 气泵按 RORI 分级自动开关；预测有降雨前馈时提前一级增氧（前馈防御性加气）
+            // 状态去重：仅状态变化才下发，避免高频事件下重复刷指令
+            var effCmd = cmdCode;
+            if (dt.rainComing && effCmd < 2) effCmd += 1;
+            var airNew = (effCmd >= 1) ? 'ON' : 'OFF';
+            if (airPumpAutoState !== airNew) {
+                airPumpAutoState = airNew;
+                sendAutoCommand('air_pump', airNew);
+            }
+
+            // 水泵：降雨前馈控水等雨 —— 预测有雨时暂缓补水，留存天然降雨（说明书 3.4）
+            var wlDown = parseInt(document.getElementById('waterlevelDownInput').value) || 30;
+            var wlUp = parseInt(document.getElementById('waterlevelUpInput').value) || 150;
+            var water = parseFloat(currentWaterLevel) || 0;
+            var pumpCmd = '';
+            if (water < wlDown) {
+                if (dt.rainComing) {
+                    if (pumpAutoState !== 'hold') { pumpAutoState = 'hold';
+                        addLog(`[前馈] 预测 6 日降雨 P6d=${dt.P6d.toFixed(1)}mm，暂缓水泵补水以留存天然降雨`, "log-info");
+                        recordAlert('warn', `预测降雨 ${dt.P6d.toFixed(1)}mm，暂缓补水留存降雨`); }
+                } else if (pumpAutoState !== 'on') { pumpAutoState = 'on'; pumpCmd = 'ON';
+                    addLog(`[自动] 水位 ${water}mm < 下限 ${wlDown}mm，自动开启水泵灌水`, "log-info");
+                    recordAlert('warn', `水位偏低 ${water}mm，自动开启水泵灌水`); }
+            } else if (water > wlUp) {
+                if (pumpAutoState !== 'off') { pumpAutoState = 'off'; pumpCmd = 'OFF';
+                    addLog(`[自动] 水位 ${water}mm > 上限 ${wlUp}mm，自动关闭水泵`, "log-safe");
+                    recordAlert('warn', `水位偏高 ${water}mm，自动关闭水泵`); }
+            } else {
+                if (pumpAutoState !== 'ok') pumpAutoState = 'ok';
+            }
+            if (pumpCmd) sendAutoCommand('water_pump', pumpCmd);
+        }
+    }
+
+    var LOG_STORE_KEY = 'farmLogs';
+    var LOG_KEEP_MS = 24 * 3600 * 1000;  // 保留 24 小时
+
+    // 更新泵状态卡片：value 为 1/on/true 表示开启
+    function updatePumpStatus(elId, val) {
+        var el = document.getElementById(elId);
+        if (!el) return;
+        var on = String(val).toLowerCase() === '1' || String(val).toLowerCase() === 'on' || String(val) === 'true';
+        el.innerText = on ? '运行中' : '待机关闭';
+        el.style.color = on ? '#3B6B4A' : '#2A2A2A';
+    }
+
+    // HTML 转义：所有拼接进 innerHTML 的外部/存储数据必须先经此函数，防止 XSS
+    function esc(s) {
+        return String(s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    function addLog(msg, theme) {
+        var now = Date.now();
+        var logs = JSON.parse(localStorage.getItem(LOG_STORE_KEY) || '[]');
+        logs.unshift({ ts: now, msg: msg, theme: theme || '' });
+        // 只保留 24 小时内
+        var cutoff = now - LOG_KEEP_MS;
+        logs = logs.filter(l => l.ts >= cutoff);
+        if (logs.length > 200) logs.length = 200;
+        try { localStorage.setItem(LOG_STORE_KEY, JSON.stringify(logs)); } catch (e) {}
+        renderLogs();
+    }
+
+    function renderLogs() {
+        var logList = document.getElementById("logList");
+        if (!logList) return;
+        var logs = JSON.parse(localStorage.getItem(LOG_STORE_KEY) || '[]');
+        var cutoff = Date.now() - LOG_KEEP_MS;
+        logs = logs.filter(l => l.ts >= cutoff);
+        if (!logs.length) {
+            logList.innerHTML = '<div class="list-empty" id="emptyLog">系统就绪，暂无记录</div>';
+            return;
+        }
+        logList.innerHTML = logs.map(l => {
+            const d = new Date(l.ts);
+            const hm = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`;
+            return `<div class="log-item ${l.theme}"><div class="log-time">${hm}</div><div style="font-weight:500;margin-top:2px;">${esc(l.msg)}</div></div>`;
+        }).join('');
+    }
+
+    function loadLogs() { renderLogs(); }
+
+    function initSocket() {
+        socket = io();
+        socket.on('connect', () => {
+            addLog("云服务连接成功");
+            refreshStatus();
+        });
+        socket.on('hw_data', (d) => {
+            if (d.type === "device_status") {
+                if (d.status === "online") {
+                    cloudConnected = true;
+                } else {
+                    cloudConnected = false;
+                    deviceOnline = false;
+                    addLog("设备断开连接", "log-danger");
+                }
+                refreshStatus();
+            }
+            else if (d.type === "data" && cloudConnected) {
+                var topic = d.topic;
+                var payload = d.payload;
+                var jsonObj = null;
+                try { jsonObj = JSON.parse(payload); } catch(e){}
+                // payload 可能是纯数字，也可能是一整个 JSON 对象，两种情况都兼容
+                function pickValue(key) {
+                    if (jsonObj && typeof jsonObj === 'object' && jsonObj[key] !== undefined) {
+                        return jsonObj[key];
+                    }
+                    return payload;
+                }
+
+                if (topic === "waterlevel" || (jsonObj && jsonObj.waterlevel !== undefined)) {
+                    var val = pickValue('waterlevel');
+                    // 探针式水位，ADC 越高水越深，满量程 4095 对应约 300mm
+                    var adc = parseFloat(val) || 0;
+                    waterAdc = adc;
+                    var waterMm = Math.max(0, Math.min(Math.round(adc / 4095 * 300), 300));
+                    currentWaterLevel = waterMm;
+                    document.getElementById("waterDisplay").innerText = waterMm;
+                    dataReceived = true;
+                    deviceOnline = true;
+                }
+                else if (topic === "humidity" || (jsonObj && jsonObj.humidity !== undefined)) {
+                    var val = pickValue('humidity');
+                    // 电容式土壤湿度，ADC 越高越干，换算成 0~100% 湿润度
+                    var adc = parseFloat(val) || 0;
+                    soilAdc = adc;
+                    var soilPct = Math.max(0, Math.min(Math.round((4095 - adc) / 4095 * 100), 100));
+                    currentSoilMoisture = soilPct;
+                    document.getElementById("soilDisplay").innerText = soilPct;
+                    dataReceived = true;
+                    deviceOnline = true;
+                }
+                else if (topic === "do" || (jsonObj && jsonObj.do !== undefined)) {
+                    // 根区溶解氧含量：固件上报 mg/L 数值，范围 0~20mg/L
+                    var val = parseFloat(pickValue('do')) || 0;
+                    doValue = Math.max(0, Math.min(val, 20));
+                    document.getElementById("doDisplay").innerText = doValue.toFixed(1);
+                    dataReceived = true;
+                    deviceOnline = true;
+                }
+                else if (topic === "eh" || (jsonObj && jsonObj.eh !== undefined)) {
+                    // 根区氧化还原电位：固件上报 mV 数值，范围 -150~300mV
+                    var val = parseFloat(pickValue('eh')) || 0;
+                    ehValue = Math.max(-150, Math.min(val, 300));
+                    document.getElementById("ehDisplay").innerText = Math.round(ehValue);
+                    dataReceived = true;
+                    deviceOnline = true;
+                }
+                else if (topic === "water_pump" || (jsonObj && jsonObj.water_pump !== undefined)) {
+                    var val = pickValue('water_pump');
+                    updatePumpStatus('waterPumpStatus', val);
+                    dataReceived = true;
+                    deviceOnline = true;
+                }
+                else if (topic === "air_pump" || (jsonObj && jsonObj.air_pump !== undefined)) {
+                    var val = pickValue('air_pump');
+                    updatePumpStatus('deviceStatus', val);
+                    dataReceived = true;
+                    deviceOnline = true;
+                }
+                else if (topic === "humi_up" || (jsonObj && jsonObj.humi_up !== undefined)) {
+                    var val = pickValue('humi_up');
+                    document.getElementById("humiUpInput").value = val;
+                    onHumiditySlider('up');
+                }
+                else if (topic === "humi_down" || (jsonObj && jsonObj.humi_down !== undefined)) {
+                    var val = pickValue('humi_down');
+                    document.getElementById("humiDownInput").value = val;
+                    onHumiditySlider('down');
+                }
+                else if (topic === "waterlevel_up" || (jsonObj && jsonObj.waterlevel_up !== undefined)) {
+                    var val = pickValue('waterlevel_up');
+                    document.getElementById("waterlevelUpInput").value = val;
+                    onWaterLevelSlider('up');
+                }
+                else if (topic === "waterlevel_down" || (jsonObj && jsonObj.waterlevel_down !== undefined)) {
+                    var val = pickValue('waterlevel_down');
+                    document.getElementById("waterlevelDownInput").value = val;
+                    onWaterLevelSlider('down');
+                }
+                else if (topic === "log") {
+                    if (payload.includes("QB_ON")) {
+                        document.getElementById("deviceStatus").innerText = "运行中";
+                        document.getElementById("deviceStatus").style.color = "#3B6B4A";
+                    } else if (payload.includes("QB_OFF")) {
+                        document.getElementById("deviceStatus").innerText = "待机关闭";
+                        document.getElementById("deviceStatus").style.color = "#2A2A2A";
+                    } else if (payload.includes("SB_ON")) {
+                        document.getElementById("waterPumpStatus").innerText = "运行中";
+                        document.getElementById("waterPumpStatus").style.color = "#3B6B4A";
+                    } else if (payload.includes("SB_OFF")) {
+                        document.getElementById("waterPumpStatus").innerText = "待机关闭";
+                        document.getElementById("waterPumpStatus").style.color = "#2A2A2A";
+                    } else {
+                        addLog("[设备] " + payload, "log-info");
+                    }
+                }
+                refreshStatus();
+                updateRori();
+                pushChartPoint();
+                checkAlerts();
+            }
+        });
+        socket.on('disconnect', () => {
+            cloudConnected = false;
+            deviceOnline = false;
+            addLog("服务器断开", "log-danger");
+            refreshStatus();
+        });
+    }
+
+    function sendAutoCommand(device, action) {
+        if (socket && socket.connected) {
+            socket.emit('send_command', { device: device, action: action.toLowerCase() });
+        }
+    }
+
+    function sendManualCommand(device, action) {
+        if (socket && socket.connected) {
+            socket.emit('send_command', { device: device, action: action.toLowerCase() });
+            addLog(`[手动] 指令: ${device === 'air_pump' ? '气泵' : '水泵'} ➡️ ${action.toLowerCase()}`, "log-info");
+        } else {
+            alert("设备未在线，无法发送指令");
+        }
+    }
+
+    window.onload = function() {
+        startClock();
+        watchHeartbeat();
+        refreshStatus();
+        loadConfig();
+        loadThreshSettings();
+        initSocket();
+        initCharts();
+        loadHistory();
+        renderAlerts();
+        loadLogs();
+    };
+</script>
+</body>
+</html>
