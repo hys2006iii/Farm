@@ -190,7 +190,15 @@ def test_alpha_segments(p6d, alpha):
 
 
 def test_dynamic_threshold_no_rain():
-    """无雨时 P6d=0，但 effLower 仍受 45% 保底约束（与前端公式逐字一致）。"""
+    """无雨时 P6d=0，但 effLower 仍受 45% 保底约束（与前端公式逐字一致）。
+
+    注意：45% 是《详细设计说明书》3.4 节规定的**无条件保底安全线**，公式为
+        effLower = max(45, humiDown - alpha * P6d / H_ROOT * 100)
+    保底意味着"任何情况下下限都不得低于 45%"。因此当基础 humi_down < 45 时，
+    保底会反过来把实际下限**抬高**到 45（本例 humi_down=40 → effLower=45），
+    这看似与"降雨前馈下调触发线"的直觉相反，但属于设计意图（安全优先），
+    **不是 bug，请勿修改**。
+    """
     dt = ir.compute_dynamic_threshold(40, 80, [0, 0, 0, 0, 0, 0])
     assert dt['P6d'] == 0.0
     assert dt['alpha'] == pytest.approx(0.95)
