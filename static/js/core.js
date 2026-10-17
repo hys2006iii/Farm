@@ -32,9 +32,12 @@
         alertCoolDown: {},
         pumpAutoState: '',
         airPumpAutoState: '',
-        // 心跳：连续丢心跳达此上限（每 5s 一跳）即判设备离线
+        // 心跳：连续丢心跳达此上限即判设备离线。
+        // 巡检每 5s 一跳，6 × 5s = 30s，与后端契约 qinghe/heartbeat.py
+        // 的 DEVICE_OFFLINE_SECONDS = 30 保持一致，避免同一设备前端显示
+        // 「已离线」而 /api/device_status 仍返回在线的自相矛盾。
         heartbeatMiss: 0,
-        heartbeatMissLimit: 4,
+        heartbeatMissLimit: 6,
         // 天气
         forecastData: [],
         dynamicThreshold: null
