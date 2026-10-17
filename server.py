@@ -253,6 +253,15 @@ def main(argv=None) -> int:
     app, socketio, hooks = load_app()
     run_init_hooks(hooks)
 
+    # 设备离线巡检：进程入口启动一次（守护线程，随进程退出）
+    try:
+        from qinghe import realtime as qinghe_realtime
+
+        qinghe_realtime.start_device_watcher()
+        print("[启动] 设备离线巡检线程已启动（每 5 秒扫描一次）")
+    except Exception as exc:  # noqa: BLE001 - 巡检失败不影响主服务
+        print(f"[警告] 设备离线巡检启动失败：{exc}")
+
     # 让 SocketIO 走多线程 WSGI 模式，保证 MQTT 后台线程 emit 可用。
     try:
         socketio.init_app(app, async_mode=SOCKETIO_ASYNC_MODE, cors_allowed_origins="*")
