@@ -4,7 +4,8 @@
  *   1) 不再每条 MQTT 消息调一次 chart.update()，改为统一 tick 2s 一次；
  *   2) update('none') 关闭过渡动画；
  *   3) 数据点超上限用 shift() 弹出，避免整数组重建；
- *   4) 关闭 parsing / animation，降低每帧开销。
+ *   4) 关闭 animation，并用 update('none') 免过渡；保留 Chart.js 默认数据解析
+ *      （parsing:false 会让 labels→数值 的解析被跳过，趋势线画不出来）。
  * ============================================================ */
 (function (root) {
     'use strict';
@@ -15,11 +16,28 @@
 
     var CHART_LIMIT = 300;   // 单图最多渲染点数（超过则抽样）
 
+    /* 图表配色令牌：与 base.css :root 的「田间记录本」色系一一对应。
+       图表位于纸面栏内，只用低饱和的墨色/玉青/赭金，不用亮饱和色。 */
+    var THEME = {
+        water: '#33646E',                    // --water  水位线
+        soil: '#3F7D5F',                     // --jade-2 土壤线
+        rori: '#9A7B3F',                     // --gold   RORI 线
+        waterFill: 'rgba(51,100,110,0.10)',
+        soilFill: 'rgba(63,125,95,0.10)',
+        roriFill: 'rgba(154,123,63,0.10)',
+        grid: 'rgba(198,191,169,0.45)',      // --line-2 网格线
+        axis: 'rgba(198,191,169,0.9)',       // 轴线略深于网格
+        tick: '#6E7A72',                     // --ink-3  刻度文字
+        tooltipBg: '#182420',                // --ink    tooltip 背景
+        font: '"Microsoft YaHei", "PingFang SC", sans-serif',
+        fontNum: '"Bahnschrift", "DIN Alternate", "Microsoft YaHei", sans-serif'
+    };
+
     /** 初始化三张图表（水位 / 土壤湿度 / RORI） */
     function initCharts() {
         if (typeof Chart === 'undefined') return;
-        Chart.defaults.font.family = '"Microsoft YaHei", sans-serif';
-        Chart.defaults.color = '#6B7A72';
+        Chart.defaults.font.family = THEME.font;
+        Chart.defaults.color = THEME.tick;
         // 全局关闭动画，配合 update('none') 彻底去掉重绘过渡
         Chart.defaults.animation = false;
 
@@ -27,11 +45,44 @@
             responsive: true,
             maintainAspectRatio: false,
             animation: false,
-            parsing: false,       // 数据已是数值数组，跳过解析器
-            normalized: true,
+            // 注意：这里不能设 parsing:false / normalized:true。
+            // 三张图用的是「data.labels + datasets[0].data = [数值…]」的经典写法，
+            // Chart.js v4 在 parsing:false 时会跳过 labels→数值解析，每个点取不到
+            // y 值，结果只剩坐标轴、y 轴退化成 0~1，趋势线完全不画。
+            // 去过渡靠 animation:false + update('none') 已足够。
             spanGaps: true,
             elements: { point: { radius: 0 } },
-            plugins: { legend: { display: false } },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: THEME.tooltipBg,
+                    titleFont: { family: THEME.font, size: 12 },
+                    bodyFont: { family: THEME.font, size: 12 },
+                    padding: 10,
+                    cornerRadius: 2,
+                    displayColors: false
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: THEME.grid, drawTicks: false },
+                    border: { color: THEME.axis },
+                    ticks: {
+                        color: THEME.tick,
+                        font: { family: THEME.fontNum, size: 11 },
+                        // 时间标签自动稀疏，避免 60 个标签挤成一团
+                        autoSkip: true,
+                        maxTicksLimit: 8,
+                        maxRotation: 0,
+                        minRotation: 0
+                    }
+                },
+                y: {
+                    grid: { color: THEME.grid, drawTicks: false },
+                    border: { color: THEME.axis },
+                    ticks: { color: THEME.tick, font: { family: THEME.fontNum, size: 11 } }
+                }
+            },
             interaction: { mode: 'nearest', intersect: false }
         };
 
@@ -42,8 +93,8 @@
                 data: {
                     labels: [],
                     datasets: [{
-                        label: '水位 (mm)', data: [], borderColor: '#2E7D8C',
-                        backgroundColor: 'rgba(46,125,140,0.12)', tension: 0.3, fill: true,
+                        label: '水位 (mm)', data: [], borderColor: THEME.water,
+                        backgroundColor: THEME.waterFill, tension: 0.3, fill: true,
                         pointRadius: 0, borderWidth: 2
                     }]
                 },
@@ -60,8 +111,8 @@
                 data: {
                     labels: [],
                     datasets: [{
-                        label: '土壤湿度 (%)', data: [], borderColor: '#1F6B45',
-                        backgroundColor: 'rgba(31,107,69,0.12)', tension: 0.3, fill: true,
+                        label: '土壤湿度 (%)', data: [], borderColor: THEME.soil,
+                        backgroundColor: THEME.soilFill, tension: 0.3, fill: true,
                         pointRadius: 0, borderWidth: 2
                     }]
                 },
@@ -78,8 +129,8 @@
                 data: {
                     labels: [],
                     datasets: [{
-                        label: 'RORI', data: [], borderColor: '#E8A33D',
-                        backgroundColor: 'rgba(232,163,61,0.12)', tension: 0.3, fill: true,
+                        label: 'RORI', data: [], borderColor: THEME.rori,
+                        backgroundColor: THEME.roriFill, tension: 0.3, fill: true,
                         pointRadius: 0, borderWidth: 2
                     }]
                 },

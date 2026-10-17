@@ -155,7 +155,7 @@
         gridEl.textContent = '';
         var div = document.createElement('div');
         div.className = 'fc-empty';
-        if (isError) div.style.color = '#B84A4A';
+        if (isError) div.style.color = '#8C6B33';
         div.textContent = text;
         gridEl.appendChild(div);
     }

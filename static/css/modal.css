@@ -1,70 +1,150 @@
 /* ============================================================
    modal.css — 配置弹窗 / 改密弹窗 / AI 对话弹窗 / 设置表单
-   由 templates/index.html 内联样式拆分而来
+   视觉：田间记录本 —— 纸面、墨线、细边框、2px 圆角、印章朱红点缀。
+   令牌全部取自 base.css 的 :root，此处不重复定义。
    ============================================================ */
 
+/* ===== 遮罩 ===== */
 .modal-overlay {
     position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(20,30,24,0.55); display: flex; justify-content: center; align-items: center;
-    z-index: 9999; backdrop-filter: blur(3px);
+    background: rgba(24, 36, 32, 0.46);
+    display: flex; justify-content: center; align-items: flex-start;
+    /* 内容比视口高时，遮罩自身滚动，弹窗仍能从头看到尾 */
+    overflow-y: auto; padding: 24px 16px;
+    z-index: 9999;
 }
 .modal-overlay.hidden { opacity: 0; pointer-events: none; }
+
+/* ===== 弹窗容器：纸面 + 墨线，不用浮起阴影 ===== */
 .modal-box {
-    background: #fff; border-radius: 16px; width: 500px; padding: 26px;
-    max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    width: 500px; padding: 24px;
+    /* margin:auto 让内容不满屏时保持居中，超高时随遮罩一起滚动 */
+    margin: auto;
+    max-height: calc(100vh - 48px); overflow-y: auto;
+    box-shadow: 0 24px 60px rgba(24, 36, 32, 0.22);
+    color: var(--ink);
+    font-family: var(--font-body);
 }
+.modal-box::-webkit-scrollbar { width: 6px; }
+.modal-box::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 3px; }
 .modal-box.modal-wide { width: 600px; }
 .modal-box.modal-narrow { width: 420px; }
+
+/* ===== 头部：标题走衬线墨字，下压一条墨线 ===== */
 .modal-hd {
     display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid #EDF1EC;
+    margin-bottom: 18px; padding-bottom: 12px;
+    border-bottom: 1px solid var(--line);
 }
-.modal-hd h2 { color: var(--primary-dark); font-size: 16px; }
+.modal-hd h2 {
+    color: var(--ink); font-family: var(--font-serif);
+    font-size: 16px; font-weight: 700; letter-spacing: 0.06em; margin: 0;
+    display: flex; align-items: center;
+}
+/* 与看板 .section-hd 同一套「左竖线」标记 */
+.modal-hd h2::before {
+    content: ""; width: 3px; height: 15px;
+    background: var(--jade); margin-right: 9px; flex: 0 0 auto;
+}
+/* 关闭按钮：2px 圆角方块，非圆形胶囊 */
 .modal-hd button {
-    background: #EDF1EC; border: none; width: 28px; height: 28px; border-radius: 50%;
-    font-weight: 700; cursor: pointer; color: #55665C;
+    background: transparent; border: 1px solid var(--line); border-radius: 2px;
+    width: 26px; height: 26px; line-height: 1;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    color: var(--ink-3); transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.modal-hd button:hover { background: #DFE6E1; }
+.modal-hd button:hover { background: var(--paper-3); border-color: var(--line-2); color: var(--ink); }
 
 /* ===== AI 对话 ===== */
 .ai-chat-box { width: 640px; height: 600px; display: flex; flex-direction: column; }
+
+/* 聊天历史区：纸底 + 极淡横线，像记录本的横格纸 */
 .chat-history {
-    flex: 1; overflow-y: auto; background: #F6F9F6; border: 1px solid #E3E9E4;
-    border-radius: 10px; padding: 14px; margin-bottom: 14px;
+    flex: 1; overflow-y: auto;
+    background-color: var(--paper);
+    background-image: repeating-linear-gradient(
+        to bottom,
+        transparent 0, transparent 27px,
+        rgba(198, 191, 169, 0.28) 27px, rgba(198, 191, 169, 0.28) 28px
+    );
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 14px; margin-bottom: 14px;
     display: flex; flex-direction: column; gap: 10px;
 }
-.chat-bubble { max-width: 80%; padding: 10px 14px; font-size: 14px; line-height: 1.6; border-radius: 12px; white-space: pre-wrap; word-break: break-word; }
-.chat-ai { align-self: flex-start; background: #fff; border: 1px solid #E3E9E4; border-bottom-left-radius: 4px; }
-.chat-user { align-self: flex-end; background: var(--primary); color: #F0F7F1; border-bottom-right-radius: 4px; }
+.chat-bubble {
+    max-width: 80%; padding: 9px 13px;
+    font-size: 13.5px; line-height: 1.7;
+    border-radius: 3px;
+    white-space: pre-wrap; word-break: break-word;
+}
+/* AI 侧：纸白底 + 墨线 */
+.chat-ai {
+    align-self: flex-start;
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    color: var(--ink-2);
+}
+/* 用户侧：玉青实底，字用纸白 */
+.chat-user {
+    align-self: flex-end;
+    background: var(--jade);
+    border: 1px solid var(--jade);
+    color: var(--paper-2);
+}
 .chat-input-area { display: flex; gap: 8px; }
 .chat-input-area input {
-    flex: 1; padding: 11px 14px; border: 1px solid #DDE4DF; border-radius: 10px;
-    background: #F6F9F6; font-size: 14px;
+    flex: 1; padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: 2px;
+    background: var(--paper-2); color: var(--ink); font-size: 13.5px;
+    font-family: var(--font-body);
+    transition: border-color 0.15s;
 }
-.chat-input-area input:focus { outline: 2px solid var(--primary); border-color: transparent; }
+/* 聚焦只换边框色，不加 glow */
+.chat-input-area input:focus { outline: none; border-color: var(--jade); }
+.chat-input-area input::placeholder { color: var(--ink-3); }
 
 /* ===== 设置表单 ===== */
 .cfg-row { margin-bottom: 12px; }
-.cfg-row label { display: block; font-size: 12px; font-weight: 600; color: #55665C; margin-bottom: 5px; }
+.cfg-row label {
+    display: block; font-size: 12px; font-weight: 600;
+    color: var(--ink-2); margin-bottom: 5px; letter-spacing: 0.02em;
+}
 .cfg-row input {
     width: 100%; padding: 8px 10px; font-size: 13px;
-    border: 1px solid #DDE4DF; border-radius: 8px; background: #F6F9F6; color: var(--text);
-    transition: border-color 0.15s, box-shadow 0.15s;
+    border: 1px solid var(--line); border-radius: 2px;
+    background: var(--paper-2); color: var(--ink);
+    font-family: var(--font-body);
+    transition: border-color 0.15s;
 }
-.cfg-row input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(31,107,69,0.12); }
-.cfg-row input[disabled] { background: #EEF2EF; color: #6B7A72; cursor: not-allowed; }
+.cfg-row input:focus { outline: none; border-color: var(--jade); }
+.cfg-row input[disabled] {
+    background: var(--paper-3); color: var(--ink-3); cursor: not-allowed;
+}
 .cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
 .cfg-grid .cfg-row { margin-bottom: 0; }
+
+/* 行内小按钮：纸面描边风 */
 .cfg-row .btn-link {
-    background: var(--primary); color: #F0F7F1; border: none; border-radius: 8px;
-    padding: 6px 14px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.15s;
+    background: var(--paper-2); color: var(--jade);
+    border: 1px solid var(--line-2); border-radius: 2px;
+    padding: 6px 14px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
-.cfg-row .btn-link:hover { background: #2A7D50; }
+.cfg-row .btn-link:hover { background: var(--jade-pale); border-color: var(--jade); }
+
 .cfg-inline { display: flex; gap: 8px; align-items: center; }
 .cfg-inline input { flex: 1; margin-top: 0; }
 .cfg-actions { display: flex; gap: 10px; margin-top: 20px; }
-.cfg-actions .btn-danger { background: #C85A5A; }
-.cfg-actions .btn-danger:hover { background: #B84A4A; }
+
+/* 危险操作走印章朱红 */
+.cfg-actions .btn-danger {
+    background: var(--seal); border: 1px solid var(--seal); color: var(--paper-2);
+}
+.cfg-actions .btn-danger:hover { background: #93382A; border-color: #93382A; }
 
 @media (max-width: 720px) {
     .modal-box, .modal-box.modal-wide, .ai-chat-box { width: calc(100vw - 32px); }

@@ -373,17 +373,21 @@
             host.textContent = '';
 
             var hero = el('div', 'device-hero');
+            // 从未上报过时 last_seen_ts 为空，别把它说成「刚刚」，那样会误导
+            var neverSeen = d.last_seen_ts === null || d.last_seen_ts === undefined;
             hero.appendChild(el('div', 'device-state ' + (online ? 'online' : 'offline'),
                 online ? '在线' : '离线'));
             hero.appendChild(el('div', 'device-hint',
-                online ? '设备上报正常，数据实时同步中' : '设备已停止上报数据'));
+                online
+                    ? '设备上报正常，数据实时同步中'
+                    : (neverSeen ? '尚未收到该设备的心跳，请确认设备已上电并连网' : '设备已停止上报数据')));
             if (!online) {
                 hero.appendChild(el('div', 'device-offline-warn', '设备已离线，请检查供电与网络'));
             }
 
             var meta = el('div', 'device-meta');
             meta.appendChild(metaCell('最近上报时间', fmtStamp(d.last_seen_ts)));
-            meta.appendChild(metaCell('静默时长', fmtSilent(d.silent_seconds)));
+            meta.appendChild(metaCell('静默时长', neverSeen ? '--' : fmtSilent(d.silent_seconds)));
             meta.appendChild(metaCell('判定', online ? '在线' : '离线'));
             hero.appendChild(meta);
 
