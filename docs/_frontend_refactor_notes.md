@@ -209,7 +209,7 @@ python app.py            # 或 python server.py
 ### 6.6 自动化命令
 
 ```bash
-node --test "tests/js/**/*.test.mjs"    # 或 npm run test:js —— 应 28 passed / 0 failed
+node --test "tests/js/**/*.test.mjs"    # 或 npm run test:js —— 应 66 passed / 0 failed
 python -m pytest tests -q               # 后端回归（由 architect 负责，不应因前端改动变红）
 git status                              # 应为干净工作区
 ```
@@ -221,3 +221,39 @@ git status                              # 应为干净工作区
 1. `core.js` 采用 IIFE + `globalThis` 挂载（而非 ESM），是为兼容模板内联 `onclick="..."` 与保持零构建工具链；代价是无法直接 `import`，测试需最小 DOM 桩。
 2. 图表横轴使用**抽样后的标签数组**（`CHART_LIMIT = 300`），点数极多时时间轴为等距近似，非严格时间比例尺。
 3. `esc()` 保留但当前业务路径已无 `innerHTML` 调用，属防御性保留，供后续新增功能使用。
+4. `charts.js:199` 的 `computeRori(h.water_adc, h.soil_adc)` 只传两个参数，DO/Eh 回退为 0。**不是遗漏**：`/api/history` 目前只序列化 `ts/water_adc/soil_adc`（`qinghe/routes/data_routes.py:33`），尽管 `db.query_history` 已 `SELECT ... do_mgl, eh_mv`。补全需后端放开这两个字段，属接口变更，未在前端范围内自行改动。
+5. 历史趋势里的 RORI 因此只反映水位/土壤两维，与实时 RORI（含 DO/Eh 四维）在数值上不完全等价；补齐接口后此差异消失。
+
+---
+
+## 八、前后端契约对齐修复（补充交付）
+
+拆分与治理之外，本轮另修了两处**前后端契约不一致**的缺陷。二者都不会抛异常、不会白屏，只是数值/状态悄悄不对，属于最难靠肉眼发现的一类，故单列并各自补了锁定用例。
+
+### 8.1 `computeRori` 参数顺序（RORI 静默算错）
+
+| 项 | 内容 |
+| --- | --- |
+| 问题 | 前端签名 `(waterAdc, soilAdc, eh, doVal)`，后端 `qinghe/irrigation.py:74` 为 `(water_adc, soil_adc, do_mgl, eh_mv)`。`realtime.js` 按前端顺序传参，等于把 **Eh 当溶解氧、DO 当氧化还原电位**代入 |
+| 危害 | 不抛错、不产生 NaN，RORI 只是整体偏移，页面照常渲染。示例参数下 75.888 → 76.005，肉眼无法分辨 |
+| 改法 | 签名改为 `computeRori(waterAdc, soilAdc, doVal, ehMv)` 与后端逐位对齐；`realtime.js` 调用点同步换序；JSDoc 标注「不要写反」 |
+| 锁定 | 新增用例以后端实测值 `75.88797313797313`（`compute_rori(1500, 2200, 6.0, 120)`）为锚点，并**反向断言**写反会得到不同的 `76.0046398046398`——任一侧再次写反都会被拦下 |
+| 验证 | JS 与 Python 同参数输出逐位相同：两侧均为 `75.88797313797313`；测试 65 passed / 0 failed |
+
+### 8.2 离线判定阈值（两端状态打架）
+
+| 项 | 内容 |
+| --- | --- |
+| 问题 | 后端 `qinghe/heartbeat.py:22` 定义 `DEVICE_OFFLINE_SECONDS = 30`（注释「契约默认 30 秒」），`/api/device_status` 按 30s 返回 `online`。前端巡检每 5s 一跳、`heartbeatMissLimit = 4`，实际 **20s** 就置 `deviceOnline = false` |
+| 危害 | 设备静默 20~30s 的窗口内，页面顶栏显示「设备离线」而 `/api/device_status` 仍返回在线；智能洞察面板与顶栏对同一设备给出相反结论 |
+| 改法 | `core.js` 的 `heartbeatMissLimit` 由 `4` 改为 `6`（6 × 5s = 30s），注释写明与后端对齐；`realtime.js` 的 `watchHeartbeat` 注释同步更新 |
+| 锁定 | 新增用例断言 `heartbeatMissLimit × 5000ms === 30000ms`，阈值一旦再漂移即失败 |
+| 验证 | 测试 66 passed / 0 failed |
+
+### 8.3 提交记录
+
+```
+fix(ui): 对齐 computeRori 前后端参数顺序，修复 RORI 静默算错   (99666d0)
+fix(ui): 前端离线判定 20s 改为 30s，与后端契约对齐              (75af5e6)
+```
+
