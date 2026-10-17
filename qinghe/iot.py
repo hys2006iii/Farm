@@ -137,12 +137,29 @@ class HistoryWriter:
         return rows
 
     def flush_once(self) -> int:
-        """立即 flush 一批，返回写入条数（测试可直接调用）。"""
+        """立即 flush 一批，返回写入条数（测试可直接调用）。
+
+        落库前按用户解析「当前地块」，把每行打进所属地块（`farm_id`），
+        让切换地块后的历史图表只看到当前田的数据。解析放在后台线程里做，
+        MQTT 回调线程仍然只做非阻塞入队。
+        """
         rows = self._drain()
         if not rows:
             return 0
         try:
-            db.insert_history_rows(rows)
+            farm_ids = {}
+            for row in rows:
+                uid = row[0]
+                if uid not in farm_ids:
+                    try:
+                        farm_ids[uid] = db.get_active_farm_id(uid)
+                    except Exception:  # noqa: BLE001 - 地块查询失败退化为账号级
+                        farm_ids[uid] = 0
+            grouped = {}
+            for row in rows:
+                grouped.setdefault(row[0], []).append(row)
+            for uid, items in grouped.items():
+                db.insert_history_rows(items, farm_id=farm_ids.get(uid, 0))
         except Exception:
             # 落库失败不能影响 MQTT 回调；重新入队等待下次重试
             for row in rows:

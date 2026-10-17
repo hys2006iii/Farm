@@ -33,7 +33,7 @@ def api_history():
         return jsonify({'error': '未授权'}), 401
     uid = session['user_id']
     limit = _parse_limit(request.args.get('limit'))
-    rows = db.query_history(uid, limit)
+    rows = db.query_history(uid, limit, farm_id=db.get_active_farm_id(uid))
     result = [
         {
             'ts': r['ts'],

@@ -7,7 +7,7 @@ from contextlib import closing
 
 import pytest
 
-from helpers import fetch_all, make_user
+from helpers import fetch_all, make_user, user_id_of
 from qinghe import config, iot
 from qinghe.db import get_db
 
@@ -137,6 +137,26 @@ def test_history_writer_flush_persists(uid):
     rows = fetch_all('SELECT ts, water_adc, soil_adc FROM sensor_history ORDER BY ts')
     assert [(r['ts'], r['water_adc'], r['soil_adc']) for r in rows] == [
         (1000, 111, 222), (2000, 333, 444)]
+
+
+def test_history_writer_tags_active_farm(client, registered):
+    """落库时按用户「当前地块」写 farm_id；切换地块后的新数据归到新地块。"""
+    from qinghe import db
+
+    uid = user_id_of('farmer01')
+    farm1 = db.get_active_farm_id(uid)
+    assert farm1
+    farm2 = client.post('/api/farms', json={'name': '南坡试验田'}).get_json()['farm']['id']
+
+    writer = iot.HistoryWriter()
+    writer.enqueue(uid, 1000, 111, 222)
+    writer.flush_once()
+    assert client.post('/api/farms/switch', json={'farm_id': farm2}).status_code == 200
+    writer.enqueue(uid, 2000, 333, 444)
+    writer.flush_once()
+
+    rows = fetch_all('SELECT ts, farm_id FROM sensor_history ORDER BY ts')
+    assert [(r['ts'], r['farm_id']) for r in rows] == [(1000, farm1), (2000, farm2)]
 
 
 def test_history_writer_flush_empty_returns_zero():

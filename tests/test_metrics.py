@@ -5,7 +5,7 @@ from datetime import date, datetime, timedelta
 import pytest
 
 from helpers import execute, fetch_all, user_id_of
-from qinghe import metrics
+from qinghe import db, metrics
 
 
 @pytest.fixture(autouse=True)
@@ -110,6 +110,27 @@ def test_estimate_water_liters_manual(client, registered):
     assert result['water_liters'] == pytest.approx(150.0)
     assert result['pump_minutes'] == 0.0
     assert result['air_minutes'] == 0.0
+
+
+def test_estimate_water_liters_filters_by_farm(client, registered):
+    """给出 farm_id 时只统计该地块的用水量，账号级汇总仍包含全部地块。"""
+    uid = _uid(registered)
+    farm1 = db.get_active_farm_id(uid)
+    farm2 = client.post('/api/farms', json={'name': '南坡试验田'}).get_json()['farm']['id']
+    base = _today_ms(8)
+
+    execute('INSERT INTO sensor_history (user_id, ts, water_adc, soil_adc, farm_id)'
+            ' VALUES (?,?,?,?,?)', (uid, base, 0, 2000, farm1))
+    execute('INSERT INTO sensor_history (user_id, ts, water_adc, soil_adc, farm_id)'
+            ' VALUES (?,?,?,?,?)', (uid, base + 60_000, 4095, 2000, farm1))
+    execute('INSERT INTO sensor_history (user_id, ts, water_adc, soil_adc, farm_id)'
+            ' VALUES (?,?,?,?,?)', (uid, base + 2 * 3_600_000, 0, 2000, farm2))
+    execute('INSERT INTO sensor_history (user_id, ts, water_adc, soil_adc, farm_id)'
+            ' VALUES (?,?,?,?,?)', (uid, base + 3 * 3_600_000, 2048, 2000, farm2))
+
+    assert metrics.estimate(uid, days=1)['water_liters'] == pytest.approx(225.0, rel=1e-3)
+    assert metrics.estimate(uid, days=1, farm_id=farm1)['water_liters'] == pytest.approx(150.0, rel=1e-3)
+    assert metrics.estimate(uid, days=1, farm_id=farm2)['water_liters'] == pytest.approx(75.0, rel=1e-3)
 
 
 def test_estimate_air_minutes_and_carbon(client, registered):

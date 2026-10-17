@@ -179,6 +179,11 @@ def latest_telemetry():
     # 没有遥测时 ctx 的 0.0 是「无数据默认值」，不能据此反算出 0 ADC 冒充读数。
     has_telemetry = bool(ctx.get('has_telemetry'))
     payload['has_telemetry'] = has_telemetry
+    if not has_telemetry:
+        # 无遥测时 ctx 的 0.0 只是默认占位，不能当真实读数返回；
+        # 与 /api/advice/calendar 的口径保持一致（前端靠 has_telemetry 判空）。
+        for key in ('water_mm', 'soil_pct', 'do_mgl', 'eh_mv', 'rori', 'rori_level'):
+            payload[key] = None
     if has_telemetry and water_mm is not None:
         payload['water_adc'] = int(round(
             max(0.0, min(float(water_mm), config.WATER_FS_MM)) / config.WATER_FS_MM * config.ADC_MAX))

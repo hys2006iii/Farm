@@ -135,7 +135,7 @@ def build_snapshot(uid: int) -> str:
         pass
 
     try:
-        rows = db.query_history(uid, 40)
+        rows = db.query_history(uid, 40, farm_id=db.get_active_farm_id(uid))
         rows = list(reversed(rows))
         if rows:
             water = [r['water_adc'] for r in rows]

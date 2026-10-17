@@ -15,7 +15,7 @@
 
 from flask import Blueprint, jsonify, request, session
 
-from qinghe import autocontrol, metrics, planner
+from qinghe import autocontrol, db, metrics, planner
 
 bp = Blueprint('insight', __name__)
 
@@ -153,8 +153,9 @@ def metrics_overview():
     if days is None:
         return jsonify({'error': 'days 必须是 1~%d 的整数' % MAX_METRIC_DAYS}), 400
     try:
-        summary = metrics.estimate(uid, days)
-        series = metrics.daily_series(uid, days)
+        farm_id = db.get_active_farm_id(uid)
+        summary = metrics.estimate(uid, days, farm_id)
+        series = metrics.daily_series(uid, days, farm_id)
     except Exception as exc:
         return jsonify({'error': '指标估算失败：%s' % exc}), 500
     payload = dict(summary)

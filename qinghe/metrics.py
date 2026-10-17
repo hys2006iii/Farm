@@ -229,23 +229,32 @@ def _runtime_by_day(uid: int, days: list) -> dict:
     return result
 
 
-def _water_mm_by_day(uid: int, days: list) -> dict:
-    """按本地自然日汇总水位抬升量（mm）：只累计正向抬升，回落视为消耗不抵扣。"""
+def _water_mm_by_day(uid: int, days: list, farm_id: int = None) -> dict:
+    """按本地自然日汇总水位抬升量（mm）：只累计正向抬升，回落视为消耗不抵扣。
+
+    `farm_id` 给出时只统计该地块的历史采样（`farm_id=0` 的旧数据仍然计入，
+    避免升级后图表归零）。
+    """
     result = {day: 0.0 for day in days}
     if not days:
         return result
     first_day = date.fromisoformat(days[0])
     start_ms = _day_start_ms(first_day)
+    farm_sql = ''
+    farm_params = []
+    if farm_id:
+        farm_sql = ' AND (farm_id = ? OR farm_id = 0)'
+        farm_params = [int(farm_id)]
     with closing(db.get_db()) as conn:
         baseline = conn.execute(
             'SELECT ts, water_adc FROM sensor_history WHERE user_id = ? AND ts < ?'
-            ' ORDER BY ts DESC LIMIT 1',
-            (int(uid), start_ms),
+            + farm_sql + ' ORDER BY ts DESC LIMIT 1',
+            [int(uid), start_ms] + farm_params,
         ).fetchone()
         rows = conn.execute(
             'SELECT ts, water_adc FROM sensor_history WHERE user_id = ? AND ts >= ?'
-            ' ORDER BY ts ASC',
-            (int(uid), start_ms),
+            + farm_sql + ' ORDER BY ts ASC',
+            [int(uid), start_ms] + farm_params,
         ).fetchall()
     prev_mm = None
     if baseline is not None:
@@ -298,11 +307,12 @@ def _method_text(area: float, ch4_rate: float) -> str:
 # ============================================================
 
 
-def daily_series(uid: int, days: int = 7) -> list:
+def daily_series(uid: int, days: int = 7, farm_id: int = None) -> list:
     """逐日返回节水减碳指标（升序，最后一项为今天）。
 
     每项 `{'day','water_liters','pump_minutes','air_minutes','ch4_saved_g','co2e_saved_g'}`，
-    口径为工程估算，非实测；`days` 收敛到 1~90。
+    口径为工程估算，非实测；`days` 收敛到 1~90；`farm_id` 给出时用水量按地块统计
+    （泵时长表是设备级累计，不按地块拆分）。
     """
     _ensure_schema()
     uid = int(uid)
@@ -310,7 +320,7 @@ def daily_series(uid: int, days: int = 7) -> list:
     day_keys = _trailing_days(days)
     area = channel_area_m2()
     ch4_rate = ch4_saved_g_per_hour()
-    water_map = _water_mm_by_day(uid, day_keys)
+    water_map = _water_mm_by_day(uid, day_keys, farm_id)
     runtime = _runtime_by_day(uid, day_keys)
 
     series = []
@@ -332,15 +342,16 @@ def daily_series(uid: int, days: int = 7) -> list:
     return series
 
 
-def estimate(uid: int, days: int = 7) -> dict:
+def estimate(uid: int, days: int = 7, farm_id: int = None) -> dict:
     """汇总最近 N 天的节水减碳指标（工程估算，非实测）。
 
     返回 `{'days','water_liters','pump_minutes','air_minutes','ch4_saved_g',
-    'co2e_saved_g','method'}`，`method` 明示估算口径与渠道面积 / 减排系数。
+    'co2e_saved_g','method'}`，`method` 明示估算口径与渠道面积 / 减排系数；
+    `farm_id` 给出时用水量只统计当前地块。
     """
     _ensure_schema()
     days = _clamp_days(days)
-    series = daily_series(int(uid), days)
+    series = daily_series(int(uid), days, farm_id)
     water_liters = sum(float(item['water_liters']) for item in series)
     pump_minutes = sum(float(item['pump_minutes']) for item in series)
     air_minutes = sum(float(item['air_minutes']) for item in series)

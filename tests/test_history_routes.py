@@ -145,3 +145,29 @@ def test_history_isolated_between_users(client, registered, uid):
     _insert(other, 1750000000001, 333, 444, 3.0, 4.0)
     rows = client.get('/api/history').get_json()['data']
     assert [r['water_adc'] for r in rows] == [111]
+
+
+def test_history_isolated_by_active_farm(client, registered, uid):
+    """历史按「当前地块」隔离：切到另一块地后看不到前一块地的采样。"""
+    farm1 = db.get_active_farm_id(uid)
+    assert farm1
+    farm2 = client.post('/api/farms', json={'name': '南坡试验田'}).get_json()['farm']['id']
+    db.insert_history_rows([(uid, 1750000000000, 111, 222, 1.0, 2.0, farm1)])
+    db.insert_history_rows([(uid, 1750000000001, 333, 444, 3.0, 4.0, farm2)])
+
+    assert [r['water_adc'] for r in client.get('/api/history').get_json()['data']] == [111]
+
+    assert client.post('/api/farms/switch', json={'farm_id': farm2}).status_code == 200
+    assert [r['water_adc'] for r in client.get('/api/history').get_json()['data']] == [333]
+
+    assert client.post('/api/farms/switch', json={'farm_id': farm1}).status_code == 200
+    assert [r['water_adc'] for r in client.get('/api/history').get_json()['data']] == [111]
+
+
+def test_history_legacy_unassigned_visible_on_any_farm(client, registered, uid):
+    """farm_id=0 的旧数据/账号级数据在任一地块都可见，升级后图表不归零。"""
+    farm2 = client.post('/api/farms', json={'name': '南坡试验田'}).get_json()['farm']['id']
+    _insert(uid, 1750000000000, 777, 888, 5.0, 6.0)
+    assert [r['water_adc'] for r in client.get('/api/history').get_json()['data']] == [777]
+    client.post('/api/farms/switch', json={'farm_id': farm2})
+    assert [r['water_adc'] for r in client.get('/api/history').get_json()['data']] == [777]

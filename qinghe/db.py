@@ -79,16 +79,33 @@ def init_db(force: bool = False) -> None:
                 water_adc INTEGER,
                 soil_adc INTEGER,
                 do_mgl REAL,
-                eh_mv REAL
+                eh_mv REAL,
+                farm_id INTEGER DEFAULT 0
             )''')
-            # 老库没有 do_mgl / eh_mv，按需补列（幂等）
+            # 老库没有 do_mgl / eh_mv / farm_id，按需补列（幂等）
             cursor.execute('PRAGMA table_info(sensor_history)')
             history_cols = [r[1] for r in cursor.fetchall()]
+            farm_id_added = False
             for col, ddl in _HISTORY_MIGRATIONS:
                 if col not in history_cols:
                     cursor.execute(ddl)
+                    if col == 'farm_id':
+                        farm_id_added = True
+            if farm_id_added:
+                # 升级旧库：历史行无法追溯真实地块，统一归到当前生效地块，
+                # 避免旧数据在切换地块后从图表里消失；无地块账号保持 0（账号级）。
+                cursor.execute(
+                    'UPDATE sensor_history SET farm_id = COALESCE('
+                    '(SELECT c.active_farm_id FROM configs c'
+                    ' WHERE c.user_id = sensor_history.user_id), 0)'
+                    ' WHERE farm_id = 0'
+                )
             cursor.execute(
                 'CREATE INDEX IF NOT EXISTS idx_history_user_ts ON sensor_history(user_id, ts)'
+            )
+            cursor.execute(
+                'CREATE INDEX IF NOT EXISTS idx_history_user_farm_ts'
+                ' ON sensor_history(user_id, farm_id, ts)'
             )
             # 只保留最近 N 天的数据
             cutoff = int(time.time() * 1000) - config.HISTORY_KEEP_DAYS * 24 * 3600 * 1000
@@ -138,10 +155,11 @@ _CONFIG_MIGRATIONS = [
      'ALTER TABLE configs ADD COLUMN active_farm_id INTEGER DEFAULT 0'),
 ]
 
-#: sensor_history 表的增量迁移列（列名, DDL）：溶解氧与氧化还原电位
+#: sensor_history 表的增量迁移列（列名, DDL）：溶解氧、氧化还原电位与所属地块
 _HISTORY_MIGRATIONS = [
     ('do_mgl', 'ALTER TABLE sensor_history ADD COLUMN do_mgl REAL'),
     ('eh_mv', 'ALTER TABLE sensor_history ADD COLUMN eh_mv REAL'),
+    ('farm_id', 'ALTER TABLE sensor_history ADD COLUMN farm_id INTEGER DEFAULT 0'),
 ]
 
 
@@ -264,13 +282,16 @@ def save_config(uid: int, values: dict) -> None:
 # DAO：sensor_history
 # ============================================================
 
-def insert_history_rows(rows) -> None:
+def insert_history_rows(rows, farm_id: int = 0) -> None:
     """批量写入历史采样。
 
     参数:
-        rows: 可迭代的 `(user_id, ts, water_adc, soil_adc[, do_mgl, eh_mv])` 元组序列。
-              4 / 5 元组会按位补齐 `None`，兼容旧调用方。
+        rows: 可迭代的 `(user_id, ts, water_adc, soil_adc[, do_mgl, eh_mv[, farm_id]])`
+              元组序列。4 / 5 / 6 元组会按位补 `None`，末位地块缺省用 `farm_id`
+              （默认 0 表示账号级/未归属）。
+        farm_id: 批量统一地块号；行内已带第 7 位时以行内为准。
     """
+    default_farm = int(farm_id or 0)
     normalized = []
     for row in rows:
         item = tuple(row)
@@ -278,27 +299,37 @@ def insert_history_rows(rows) -> None:
             item = item + (None, None)
         elif len(item) == 5:
             item = item + (None,)
-        normalized.append(item[:6])
+        if len(item) == 6:
+            item = item + (default_farm,)
+        normalized.append(item[:7])
     if not normalized:
         return
     with closing(get_db()) as conn:
         conn.executemany(
             'INSERT INTO sensor_history'
-            ' (user_id, ts, water_adc, soil_adc, do_mgl, eh_mv)'
-            ' VALUES (?, ?, ?, ?, ?, ?)',
+            ' (user_id, ts, water_adc, soil_adc, do_mgl, eh_mv, farm_id)'
+            ' VALUES (?, ?, ?, ?, ?, ?, ?)',
             normalized,
         )
         conn.commit()
 
 
-def query_history(uid: int, limit: int):
-    """按时间倒序取最近 limit 条历史，返回 sqlite3.Row 列表（未 reverse）。"""
+def query_history(uid: int, limit: int, farm_id: int = None):
+    """按时间倒序取最近 limit 条历史，返回 sqlite3.Row 列表（未 reverse）。
+
+    `farm_id` 给出时只返回该地块的历史；`farm_id=0` 的行是未归属/账号级旧数据，
+    对所有地块都可见，避免升级或单地块账号丢图。
+    """
+    sql = ('SELECT ts, water_adc, soil_adc, do_mgl, eh_mv FROM sensor_history'
+           ' WHERE user_id = ?')
+    params = [uid]
+    if farm_id:
+        sql += ' AND (farm_id = ? OR farm_id = 0)'
+        params.append(int(farm_id))
+    sql += ' ORDER BY ts DESC LIMIT ?'
+    params.append(limit)
     with closing(get_db()) as conn:
-        cur = conn.execute(
-            'SELECT ts, water_adc, soil_adc, do_mgl, eh_mv FROM sensor_history'
-            ' WHERE user_id = ? ORDER BY ts DESC LIMIT ?',
-            (uid, limit),
-        )
+        cur = conn.execute(sql, params)
         return cur.fetchall()
 
 
