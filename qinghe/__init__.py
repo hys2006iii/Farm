@@ -52,12 +52,15 @@ def _register_security_headers(app: Flask) -> None:
 def _register_blueprints(app: Flask) -> None:
     """注册全部 HTTP 蓝图，URL 前缀与旧版 app.py 逐字保持一致。"""
     from qinghe.routes import (
+        advice_routes,
         ai_routes,
         app_routes,
         auth_routes,
         config_routes,
         data_routes,
+        dev_routes,
         export_routes,
+        farm_routes,
         insight_routes,
         monitor_routes,
     )
@@ -70,6 +73,9 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(insight_routes.bp)
     app.register_blueprint(export_routes.bp)
     app.register_blueprint(monitor_routes.bp)
+    app.register_blueprint(farm_routes.bp)
+    app.register_blueprint(advice_routes.bp)
+    app.register_blueprint(dev_routes.bp)
 
 
 def _register_error_handlers(app: Flask) -> None:

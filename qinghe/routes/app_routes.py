@@ -28,6 +28,14 @@ def route_index():
     return render_template('index.html', username=session.get('username'))
 
 
+@bp.route('/knowledge')
+def route_knowledge():
+    """知识库页面（灌溉科普 + 系统内核说明）：未登录跳回首页。"""
+    if 'user_id' not in session:
+        return redirect(url_for('app_api.route_root'))
+    return render_template('knowledge.html', username=session.get('username'))
+
+
 @bp.route('/api/app_send_command', methods=['POST'])
 @auth.require_token
 def api_app_command(uid):

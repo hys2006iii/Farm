@@ -69,6 +69,30 @@ def as_int(data, key, default=None):
     raise ValidationError('参数 %s 类型错误，应为整数' % key)
 
 
+def as_float(data, key, default=None):
+    """取浮点字段。
+
+    接受 `int`/`float`（`bool` 视为非法）与可解析的纯数字字符串；`None` /
+    缺失返回 `default`；其他类型或不可解析的值抛 `ValidationError`。
+    """
+    value = data.get(key) if isinstance(data, dict) else None
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        raise ValidationError('参数 %s 类型错误，应为数字' % key)
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return default
+        try:
+            return float(text)
+        except ValueError:
+            raise ValidationError('参数 %s 类型错误，应为数字' % key) from None
+    raise ValidationError('参数 %s 类型错误，应为数字' % key)
+
+
 def as_bool(data, key, default=False):
     """取布尔字段。只接受真正的 `bool`，其他类型抛 `ValidationError`。"""
     value = data.get(key) if isinstance(data, dict) else None

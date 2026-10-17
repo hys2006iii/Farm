@@ -102,6 +102,22 @@ def init_db(force: bool = False) -> None:
                 manual_mode INTEGER DEFAULT 0,
                 updated_ts INTEGER
             )''')
+            # 多农场（地块）表：一个账号可管理多块田，configs 只镜像当前生效地块
+            cursor.execute('''CREATE TABLE IF NOT EXISTS farms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                lat REAL,
+                lon REAL,
+                area_m2 REAL DEFAULT 0,
+                polygon TEXT DEFAULT '',
+                created_ts INTEGER NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )''')
+            cursor.execute(
+                'CREATE INDEX IF NOT EXISTS idx_farms_user ON farms(user_id, id)'
+            )
+            # farms 表在旧库可能不存在（上面已补建），configs 的 active_farm_id 交给迁移列表
             conn.commit()
         _initialized = True
 
@@ -118,6 +134,8 @@ _CONFIG_MIGRATIONS = [
      "ALTER TABLE configs ADD COLUMN iot_cmd_topic TEXT DEFAULT '/esp32e/cmd'"),
     ('farm_name', "ALTER TABLE configs ADD COLUMN farm_name TEXT DEFAULT ''"),
     ('webhook_url', "ALTER TABLE configs ADD COLUMN webhook_url TEXT DEFAULT ''"),
+    ('active_farm_id',
+     'ALTER TABLE configs ADD COLUMN active_farm_id INTEGER DEFAULT 0'),
 ]
 
 #: sensor_history 表的增量迁移列（列名, DDL）：溶解氧与氧化还原电位
@@ -159,9 +177,14 @@ def create_user(username: str, password_hash: str):
             uid = cursor.lastrowid
             cursor.execute('INSERT INTO configs (user_id) VALUES (?)', (uid,))
             conn.commit()
-            return uid
         except sqlite3.IntegrityError:
             return None
+    # 新账号自动建一块默认地，设置页/地图选点都有落点可用
+    try:
+        ensure_default_farm(uid)
+    except sqlite3.Error:
+        pass
+    return uid
 
 
 def get_user_by_username(username: str):
@@ -331,3 +354,170 @@ def set_geo_cache(key: str, name: str) -> None:
             (key, name, int(time.time())),
         )
         conn.commit()
+
+
+# ============================================================
+# DAO：farms（多农场 / 地块）
+# ============================================================
+
+#: 新账号自动创建的首个地块名
+DEFAULT_FARM_NAME = '默认地块'
+
+_FARM_FIELDS = ('id', 'user_id', 'name', 'lat', 'lon', 'area_m2', 'polygon', 'created_ts')
+
+
+def _farm_dict(row) -> dict:
+    """把 farms 行转为可 JSON 序列化的 dict。"""
+    if row is None:
+        return None
+    return {
+        'id': int(row['id']),
+        'name': row['name'],
+        'lat': None if row['lat'] is None else float(row['lat']),
+        'lon': None if row['lon'] is None else float(row['lon']),
+        'area_m2': float(row['area_m2'] or 0.0),
+        'polygon': row['polygon'] or '',
+        'created_ts': int(row['created_ts'] or 0),
+    }
+
+
+def count_farms(uid: int) -> int:
+    """统计该账号的地块数量。"""
+    with closing(get_db()) as conn:
+        cur = conn.execute('SELECT COUNT(*) AS n FROM farms WHERE user_id=?', (uid,))
+        return int(cur.fetchone()['n'])
+
+
+def list_farms(uid: int) -> list:
+    """按创建顺序列出该账号所有地块（dict 列表）。"""
+    with closing(get_db()) as conn:
+        cur = conn.execute(
+            'SELECT * FROM farms WHERE user_id=? ORDER BY id ASC', (uid,)
+        )
+        return [_farm_dict(row) for row in cur.fetchall()]
+
+
+def get_farm(uid: int, farm_id: int) -> dict:
+    """按 id 取地块（仅限本人），不存在返回 None。"""
+    with closing(get_db()) as conn:
+        cur = conn.execute(
+            'SELECT * FROM farms WHERE user_id=? AND id=?', (uid, farm_id)
+        )
+        return _farm_dict(cur.fetchone())
+
+
+def create_farm(uid: int, name: str, lat=None, lon=None,
+                area_m2: float = 0.0, polygon: str = '') -> int:
+    """新建地块，返回新 id。"""
+    with closing(get_db()) as conn:
+        cur = conn.execute(
+            'INSERT INTO farms (user_id, name, lat, lon, area_m2, polygon, created_ts)'
+            ' VALUES (?,?,?,?,?,?,?)',
+            (uid, name, lat, lon, area_m2, polygon, int(time.time())),
+        )
+        conn.commit()
+        return int(cur.lastrowid)
+
+
+def update_farm(uid: int, farm_id: int, name: str, lat=None, lon=None,
+                area_m2: float = 0.0, polygon: str = '') -> bool:
+    """更新地块信息，返回是否命中。"""
+    with closing(get_db()) as conn:
+        cur = conn.execute(
+            'UPDATE farms SET name=?, lat=?, lon=?, area_m2=?, polygon=?'
+            ' WHERE user_id=? AND id=?',
+            (name, lat, lon, area_m2, polygon, uid, farm_id),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def delete_farm(uid: int, farm_id: int) -> bool:
+    """删除地块（至少保留一块的约束由调用方保证），返回是否命中。"""
+    with closing(get_db()) as conn:
+        cur = conn.execute(
+            'DELETE FROM farms WHERE user_id=? AND id=?', (uid, farm_id)
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def get_active_farm_id(uid: int) -> int:
+    """读取当前生效地块 id，未设置返回 0。"""
+    with closing(get_db()) as conn:
+        cur = conn.execute(
+            'SELECT active_farm_id FROM configs WHERE user_id=?', (uid,)
+        )
+        row = cur.fetchone()
+        if row is None or row['active_farm_id'] is None:
+            return 0
+        return int(row['active_farm_id'])
+
+
+def _mirror_to_config(conn, uid: int, farm: dict) -> None:
+    """把地块的名称/经纬度镜像进 configs（天气、看板、逆地理都读这几个字段）。"""
+    conn.execute(
+        'UPDATE configs SET farm_name=?, farm_lat=?, farm_lng=?, active_farm_id=?'
+        ' WHERE user_id=?',
+        (
+            farm.get('name') or '',
+            '' if farm.get('lat') is None else str(farm['lat']),
+            '' if farm.get('lon') is None else str(farm['lon']),
+            int(farm.get('id') or 0),
+            uid,
+        ),
+    )
+
+
+def set_active_farm(uid: int, farm_id: int) -> bool:
+    """切换当前地块：写 configs.active_farm_id 并镜像名称与坐标。"""
+    farm = get_farm(uid, farm_id)
+    if farm is None:
+        return False
+    with closing(get_db()) as conn:
+        _mirror_to_config(conn, uid, farm)
+        conn.commit()
+    return True
+
+
+def ensure_default_farm(uid: int) -> dict:
+    """保证账号至少有一块地；返回当前生效地块 dict（必要时新建并激活）。"""
+    farms = list_farms(uid)
+    if not farms:
+        cfg = load_config(uid)
+        name = (cfg['farm_name'] if cfg and cfg['farm_name'] else '') or DEFAULT_FARM_NAME
+        lng = cfg['farm_lng'] if cfg else ''
+        lat = cfg['farm_lat'] if cfg else ''
+        farm_id = create_farm(
+            uid,
+            name or DEFAULT_FARM_NAME,
+            float(lat) if lat else None,
+            float(lng) if lng else None,
+        )
+        farms = list_farms(uid)
+        set_active_farm(uid, farm_id)
+        return get_farm(uid, farm_id)
+    active_id = get_active_farm_id(uid)
+    current = get_farm(uid, active_id) if active_id else None
+    if current is None:
+        # active_farm_id 失效（被删/旧库）：回落到第一块地
+        set_active_farm(uid, farms[0]['id'])
+        return get_farm(uid, farms[0]['id'])
+    return current
+
+
+def save_active_farm_meta(uid: int, name=None, lat=None, lon=None,
+                          area_m2=None, polygon=None) -> bool:
+    """保存设置页里对「当前地块」的修改（名称/坐标/面积/边界）。"""
+    farm = ensure_default_farm(uid)
+    if farm is None:
+        return False
+    return update_farm(
+        uid,
+        farm['id'],
+        name if name is not None else farm['name'],
+        lat if lat is not None else farm['lat'],
+        lon if lon is not None else farm['lon'],
+        area_m2 if area_m2 is not None else farm['area_m2'],
+        polygon if polygon is not None else farm['polygon'],
+    )

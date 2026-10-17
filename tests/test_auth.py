@@ -483,7 +483,12 @@ def test_login_success_is_200(client, registered):
     username, password = registered
     resp = client.post('/api/login', json={'username': username, 'password': password})
     assert resp.status_code == 200
-    assert resp.get_json() == {'status': 'success', 'message': '登录成功'}
+    body = resp.get_json()
+    assert body['status'] == 'success'
+    assert body['message'] == '登录成功'
+    # 多农场改造后，登录响应额外带地块清单，供前端弹选择框
+    assert body['active_farm_id']
+    assert body['farms'] and body['farms'][0]['id'] == body['active_farm_id']
 
 
 def test_app_login_wrong_password_body_unchanged(client, registered):

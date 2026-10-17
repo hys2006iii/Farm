@@ -69,9 +69,12 @@ def _reset_global_state():
 
     auth.reset_login_failures()
     iot.mqtt_clients.clear()
+    # 告警判定限频表是进程级全局，测试之间必须清掉，否则后一个用例的首批上报会被跳过
+    iot._alert_eval_last.clear()
     yield
     auth.reset_login_failures()
     iot.mqtt_clients.clear()
+    iot._alert_eval_last.clear()
 
 
 @pytest.fixture()

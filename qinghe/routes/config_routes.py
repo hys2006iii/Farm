@@ -47,6 +47,21 @@ def _to_int(value, default=None):
         return default
 
 
+def _to_float(value, default=None):
+    """宽松转 float：接受 int/float/数字字符串，空值或非法返回 default。"""
+    if value is None or isinstance(value, bool):
+        return default
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return default
+    try:
+        return float(text)
+    except (TypeError, ValueError):
+        return default
+
+
 @bp.route('/api/get_config', methods=['GET'])
 def api_get_config():
     """读取当前用户配置；敏感凭据不回显明文，已设置则返回掩码占位。"""
@@ -95,6 +110,16 @@ def api_save_config():
     values['iot_port'] = port
 
     db.save_config(uid, values)
+    # 设置页改的农场名/经纬度同步到当前地块记录，避免 farms 表与 configs 漂移
+    try:
+        db.save_active_farm_meta(
+            uid,
+            name=values.get('farm_name') or None,
+            lat=_to_float(values.get('farm_lat')),
+            lon=_to_float(values.get('farm_lng')),
+        )
+    except Exception:  # noqa: BLE001 - 地块同步失败不影响配置保存
+        pass
     # 异步重连：避免 connect() 的 60s 超时阻塞请求线程
     _reconnect_async(uid)
     return jsonify({'status': 'success', 'message': '配置已更新'})

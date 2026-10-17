@@ -4,23 +4,29 @@
 """
 
 from qinghe.routes import (  # noqa: F401
+    advice_routes,
     ai_routes,
     app_routes,
     auth_routes,
     config_routes,
     data_routes,
+    dev_routes,
     export_routes,
+    farm_routes,
     insight_routes,
     monitor_routes,
 )
 
 __all__ = [
+    'advice_routes',
     'ai_routes',
     'app_routes',
     'auth_routes',
     'config_routes',
     'data_routes',
+    'dev_routes',
     'export_routes',
+    'farm_routes',
     'insight_routes',
     'monitor_routes',
 ]

@@ -57,7 +57,18 @@ def api_login():
         auth.clear_login_failures(username)
         session['user_id'] = user['id']
         session['username'] = user['username']
-        return jsonify({'status': 'success', 'message': '登录成功'})
+        # 带上地块清单，前端可在凭据通过后让用户选择进入哪块地
+        farm = db.ensure_default_farm(user['id'])
+        farms = db.list_farms(user['id'])
+        return jsonify({
+            'status': 'success',
+            'message': '登录成功',
+            'username': user['username'],
+            'active_farm_id': db.get_active_farm_id(user['id']),
+            'farm_count': len(farms),
+            'farms': farms,
+            'active_farm': farm,
+        })
     auth.record_login_failure(username)
     return jsonify({'status': 'error', 'message': '账号或密码错误'}), 401
 
