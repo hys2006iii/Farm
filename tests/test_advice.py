@@ -82,6 +82,32 @@ def test_summarize_counts_and_forecast_state():
     assert '天气' in text
 
 
+def test_api_summary_mentions_oxygen_risk(logged_in):
+    """RORI 高时总览必须提示增氧，避免与红色缺氧预警自相矛盾。"""
+    from qinghe import planner
+
+    with logged_in.session_transaction() as sess:
+        uid = sess['user_id']
+    planner.update_telemetry(uid, waterlevel=1500, humidity=2200, do=6.0, eh=120.0)
+    body = logged_in.get('/api/advice/calendar').get_json()
+    assert body['rori'] >= 40
+    assert '缺氧' in body['summary']
+    assert '加气泵' in body['summary']
+
+
+def test_api_summary_silent_when_oxygen_ok(logged_in):
+    """RORI 低时不硬塞增氧提示。"""
+    from qinghe import planner
+
+    with logged_in.session_transaction() as sess:
+        uid = sess['user_id']
+    # 水位很低（Risk_water 小）、DO 高、Eh 高 → RORI 偏低
+    planner.update_telemetry(uid, waterlevel=100, humidity=3900, do=7.6, eh=240.0)
+    body = logged_in.get('/api/advice/calendar').get_json()
+    if body['rori'] is not None and body['rori'] < 40:
+        assert '加气泵' not in body['summary']
+
+
 # ---------------------------------------------------------------- 接口
 
 @pytest.fixture()

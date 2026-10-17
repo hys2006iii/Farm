@@ -39,6 +39,18 @@ def api_advice_calendar():
         thresholds=thresh,
         dynamic=dynamic,
     )
+    summary = advice.summarize(calendar, dynamic, bool(precips))
+    # 灌水建议只看墒情与水情，但根区缺氧是独立风险：RORI 偏高时要单独提示增氧，
+    # 否则会出现「RORI 76 重度厌氧」却写「正常维持」的自相矛盾。
+    rori = ctx.get('rori')
+    try:
+        rori_value = float(rori) if rori is not None else None
+    except (TypeError, ValueError):
+        rori_value = None
+    if rori_value is not None and rori_value >= 40:
+        oxygen = '根区缺氧风险 %.0f 分，建议开启加气泵增氧' % rori_value
+        summary = summary + '；' + oxygen
+
     return jsonify({
         'status': 'success',
         'has_forecast': bool(precips),
@@ -50,6 +62,6 @@ def api_advice_calendar():
         'alpha': ctx.get('alpha'),
         'eff_lower': ctx.get('eff_lower'),
         'eff_upper': ctx.get('eff_upper'),
-        'summary': advice.summarize(calendar, dynamic, bool(precips)),
+        'summary': summary,
         'days': calendar,
     })

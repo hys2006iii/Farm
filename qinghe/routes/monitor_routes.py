@@ -143,3 +143,46 @@ def device_status():
     payload = {'status': 'success'}
     payload.update(status)
     return jsonify(payload)
+
+
+@bp.get('/api/telemetry')
+def latest_telemetry():
+    """返回当前地块最近一次遥测快照（页面刷新后看板据此恢复读数）。
+
+    说明：实时推送靠 SocketIO，但刷新页面或手机切后台回来时没有历史事件，
+    这里把服务端缓存的最新值补一帧，避免看板空白而图表/建议却有数据。
+    同时给出 ADC 反算值，前端能直接复用与 MQTT 相同的换算逻辑。
+    """
+    uid = _current_uid()
+    if uid is None:
+        return _unauthorized()
+
+    from qinghe import config, planner
+
+    ctx = planner.build_context(uid)
+    water_mm = ctx.get('water_mm')
+    soil_pct = ctx.get('soil_pct')
+    payload = {
+        'status': 'success',
+        'has_telemetry': bool(ctx.get('has_telemetry')),
+        'ts': ctx.get('ts'),
+        'water_mm': water_mm,
+        'soil_pct': soil_pct,
+        'do_mgl': ctx.get('do_mgl'),
+        'eh_mv': ctx.get('eh_mv'),
+        'air_pump': ctx.get('air_pump'),
+        'water_pump': ctx.get('water_pump'),
+        'rori': ctx.get('rori'),
+        'rori_level': ctx.get('rori_level'),
+    }
+    # ADC 反算：水位越低 ADC 越小，土壤电容式传感器读数越高越干。
+    # 没有遥测时 ctx 的 0.0 是「无数据默认值」，不能据此反算出 0 ADC 冒充读数。
+    has_telemetry = bool(ctx.get('has_telemetry'))
+    payload['has_telemetry'] = has_telemetry
+    if has_telemetry and water_mm is not None:
+        payload['water_adc'] = int(round(
+            max(0.0, min(float(water_mm), config.WATER_FS_MM)) / config.WATER_FS_MM * config.ADC_MAX))
+    if has_telemetry and soil_pct is not None:
+        pct = max(0.0, min(float(soil_pct), 100.0))
+        payload['soil_adc'] = int(round((1 - pct / 100.0) * config.ADC_MAX))
+    return jsonify(payload)

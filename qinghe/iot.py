@@ -290,9 +290,11 @@ def _feed_insight(uid, values: dict, now_ms: int) -> None:
     except Exception:  # noqa: BLE001 - 新增模块缺失时静默跳过
         return
 
-    # 1) 心跳：驱动服务端在线判定
+    # 1) 心跳：驱动服务端在线判定。
+    # 用墙钟而不是报文里的 ts——心跳表示「此刻收到过包」，而模拟器/补录会带历史
+    # 时间戳，若按报文时间算会被立刻判成离线。
     try:
-        heartbeat.mark_seen(uid, now_ms)
+        heartbeat.mark_seen(uid)
     except Exception:  # noqa: BLE001
         pass
 
