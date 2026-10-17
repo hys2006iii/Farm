@@ -1,93 +1,274 @@
 /* ============================================================
-   dashboard.css — 传感器网格 / RORI / 降雨预报 / 控制与阈值滑块 / 图表容器 / 趋势布局
-   由 templates/index.html 内联样式拆分而来
+   dashboard.css — 看板专属区块：四路读数 / RORI / 六日雨情 /
+   阈值双滑杆 / 趋势图 / 日志与告警排版
+   视觉方向承接 base.css：纸面、墨线、水尺刻度、朱红印章
    ============================================================ */
 
-/* ===== 传感器网格 ===== */
-.sensor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
-.sensor-cell.full { grid-column: 1 / -1; }
+/* ===== 四路读数：3×2 网格，读数用等宽数字 ===== */
+.sensor-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    border: 1px solid var(--line);
+    background: var(--paper-2);
+}
+
 .sensor-cell {
-    background: linear-gradient(160deg, #F8FBF9, #F0F5F1);
-    border: 1px solid var(--card-border); border-radius: 10px;
-    padding: 14px; text-align: center; transition: transform 0.15s;
+    position: relative;
+    padding: 13px 14px 12px;
+    border-right: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    min-width: 0;
 }
-.sensor-cell:hover { transform: translateY(-2px); }
-.sensor-cell .label { font-size: 12px; color: var(--text-sub); font-weight: 600; margin-bottom: 6px; }
-.sensor-cell .value {
-    font-size: 34px; font-weight: 800; color: var(--text);
-    font-variant-numeric: tabular-nums; letter-spacing: -1px;
-}
-.sensor-cell .unit { font-size: 13px; color: var(--text-sub); margin-left: 3px; }
-.sensor-cell .value.status { font-size: 26px; }
 
-/* ===== RORI 行 ===== */
+.sensor-cell:nth-child(3n) { border-right: none; }
+.sensor-cell:nth-child(n+4) { border-bottom: none; }
+
+.sensor-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 8px; margin-bottom: 9px;
+}
+
+.sensor-name {
+    font-family: var(--font-serif);
+    font-size: 13.5px; font-weight: 700; color: var(--ink-2);
+    letter-spacing: 0.04em; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+}
+
+.sensor-en {
+    font-family: var(--font-num);
+    font-size: 9.5px; font-weight: 600; color: #A8AE9F;
+    letter-spacing: 0.16em; white-space: nowrap;
+}
+
+.sensor-read {
+    display: flex; align-items: baseline; gap: 3px;
+    font-family: var(--font-num); font-variant-numeric: tabular-nums;
+}
+
+.sensor-read .value {
+    font-size: 27px; font-weight: 600; line-height: 1.05;
+    color: var(--ink); letter-spacing: 0.01em;
+}
+
+.sensor-read .value.status {
+    font-family: var(--font-serif);
+    font-size: 20px; font-weight: 700; letter-spacing: 0.08em;
+}
+
+.sensor-read .unit {
+    font-size: 11.5px; font-weight: 500; color: var(--ink-3); letter-spacing: 0.03em;
+}
+
+/* 每个读数下方一条极短的“水尺刻线”，颜色区分通道 */
+.sensor-scale {
+    position: relative; height: 3px; margin-top: 10px;
+    background: var(--line);
+}
+.sensor-scale::after {
+    content: ""; position: absolute; left: 0; top: 0; height: 3px; width: 28%;
+    background: var(--jade);
+}
+.sensor-cell--water .sensor-scale::after { background: var(--water); width: 46%; }
+.sensor-cell--soil .sensor-scale::after { background: var(--jade-2); width: 54%; }
+.sensor-cell--do .sensor-scale::after { background: var(--water); width: 38%; }
+.sensor-cell--eh .sensor-scale::after { background: var(--gold); width: 62%; }
+.sensor-cell--state .sensor-scale { display: none; }
+
+/* 泵状态：有信号时给一点“在场”感，无信号保持灰 */
+.sensor-cell--state .value.status[data-on="1"] { color: var(--jade); }
+.sensor-cell--state .value.status[data-on="0"] { color: var(--ink-3); }
+
+/* ===== RORI 横条：左说明右大数 ===== */
 .rori-row {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 14px 18px; background: linear-gradient(160deg, #F8FBF9, #F0F5F1);
-    border: 1px solid var(--card-border); border-radius: 10px;
+    margin-top: 14px; padding-top: 14px;
+    border-top: 1px dashed var(--line-2);
+    display: flex; align-items: center; justify-content: space-between; gap: 18px;
 }
-.rori-row .rori-gauge-wrap { display: flex; align-items: center; gap: 18px; }
-.rori-title { font-size: 13px; font-weight: 700; color: #4A5A50; }
-.rori-status { font-size: 13px; color: #7A8A80; margin-top: 3px; }
-.rori-val { font-size: 40px; font-weight: 800; }
-.rori-unit { font-size: 13px; color: #7A8A80; font-weight: 600; }
 
-/* ===== 降雨预报 ===== */
-.fc-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.rori-info { min-width: 0; }
+
+.rori-title {
+    font-family: var(--font-serif);
+    font-size: 13.5px; font-weight: 700; color: var(--ink-2); letter-spacing: 0.05em;
+}
+
+.rori-status { margin-top: 5px; font-size: 12px; color: var(--ink-3); letter-spacing: 0.04em; }
+
+.risk-scale {
+    display: flex; margin-top: 9px; border: 1px solid var(--line);
+    width: fit-content; font-size: 10.5px; letter-spacing: 0.03em;
+}
+.risk-scale .risk-zone {
+    padding: 3px 9px; color: var(--ink-3); border-right: 1px solid var(--line);
+    font-family: var(--font-num);
+}
+.risk-scale .risk-zone:last-child { border-right: none; }
+.risk-scale .risk-idle { background: var(--paper-3); }
+.risk-scale .risk-pulse { background: var(--gold-pale); color: #7A6128; }
+.risk-scale .risk-full { background: var(--seal-pale); color: #8C392B; }
+
+.rori-gauge-wrap { display: flex; align-items: baseline; gap: 4px; flex: 0 0 auto; }
+
+.rori-val {
+    font-family: var(--font-num); font-variant-numeric: tabular-nums;
+    font-size: 46px; font-weight: 600; line-height: 1; color: var(--ink);
+    letter-spacing: -0.01em;
+}
+
+.rori-unit { font-size: 11.5px; color: var(--ink-3); letter-spacing: 0.06em; }
+
+/* ===== 未来六日降雨：六格雨情小签 ===== */
+.fc-grid {
+    display: grid; grid-template-columns: repeat(6, 1fr);
+    border: 1px solid var(--line);
+}
+
 .fc-item {
-    background: #F8FBF9; border: 1px solid var(--card-border);
-    border-radius: 10px; padding: 12px 6px; text-align: center; transition: transform 0.15s;
+    padding: 10px 8px 9px;
+    border-right: 1px solid var(--line);
+    background: var(--paper-2);
+    text-align: left;
+    min-width: 0;
 }
-.fc-item:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
-.fc-date { font-size: 13px; font-weight: 600; color: #5A4E42; margin-bottom: 3px; }
-.fc-value { font-size: 17px; font-weight: 700; color: #3B6A7A; }
-.fc-value .unit { font-size: 11px; color: #8A7E72; font-weight: 400; margin-left: 2px; }
-.fc-tag { font-size: 12px; color: #8A7E72; margin-top: 4px; }
-.fc-empty { grid-column: 1 / -1; color: #7A8A80; text-align: center; padding: 16px 0; }
+.fc-item:last-child { border-right: none; }
 
-/* ===== 阈值滑杆 ===== */
-.thresh-group { margin-bottom: 16px; padding-bottom: 12px; }
-.thresh-group.divider { border-bottom: 1px dashed #D0C8BE; }
-.thresh-name { font-size: 13px; font-weight: 600; color: #5A4E42; }
-.thresh-val { font-weight: 700; }
-.thresh-val .lo { color: #C8903F; }
-.thresh-val .hi { color: #3B6B4A; }
-.thresh-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.dual-range-container { position: relative; width: 100%; height: 36px; display: flex; align-items: center; margin-top: 4px; }
-.dual-range-track { position: absolute; left: 8px; right: 8px; height: 8px; background: #E3E9E4; border-radius: 4px; z-index: 1; }
+.fc-date {
+    font-family: var(--font-num);
+    font-size: 10.5px; color: var(--ink-3); letter-spacing: 0.04em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.fc-value {
+    margin-top: 6px;
+    font-family: var(--font-num); font-variant-numeric: tabular-nums;
+    font-size: 18px; font-weight: 600; color: var(--water);
+    line-height: 1.1;
+}
+.fc-value .unit { font-size: 10px; font-weight: 400; color: var(--ink-3); margin-left: 1px; }
+
+.fc-tag {
+    margin-top: 4px; font-size: 10.5px; color: var(--ink-3);
+    letter-spacing: 0.03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* 雨量越大，格子底色越深（用属性选择器留给可扩展） */
+.fc-item[data-heavy="1"] { background: #EEF3F0; }
+
+.fc-empty {
+    grid-column: 1 / -1; padding: 20px 10px;
+    text-align: center; font-size: 12px; color: var(--ink-3); letter-spacing: 0.05em;
+    border: 1px dashed var(--line-2);
+}
+.fc-grid:has(> .fc-empty) { border: none; }
+
+/* ===== 调控区：分组标题、分隔线、双滑杆 ===== */
+.control-sub-hd {
+    font-family: var(--font-serif);
+    font-size: 13px; font-weight: 700; color: var(--jade); letter-spacing: 0.06em;
+    margin: 2px 0 8px;
+}
+
+.control-divider { height: 1px; background: var(--line); margin: 16px 0; }
+
+.thresh-group { margin-bottom: 14px; padding-bottom: 12px; }
+.thresh-group.divider { border-bottom: 1px dashed var(--line-2); }
+
+.thresh-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 10px; margin-bottom: 7px; flex-wrap: wrap;
+}
+
+.thresh-name { font-size: 12.5px; font-weight: 600; color: var(--ink-2); letter-spacing: 0.03em; }
+
+.thresh-val {
+    font-family: var(--font-num); font-variant-numeric: tabular-nums;
+    font-size: 11.5px; color: var(--ink-3); letter-spacing: 0.02em;
+}
+.thresh-val .lo { color: var(--gold); font-weight: 700; }
+.thresh-val .hi { color: var(--jade); font-weight: 700; }
+
+/* 双滑杆：轨道是一条“量程尺”，两端刻度用虚线补齐 */
+.dual-range-container {
+    position: relative; width: 100%; height: 30px;
+    display: flex; align-items: center; margin-top: 2px;
+}
+
+.dual-range-track {
+    position: absolute; left: 9px; right: 9px; height: 4px;
+    background: var(--paper-3);
+    border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2);
+}
+
 .dual-range-container input[type=range] {
-    position: absolute; width: 100%; background: transparent; pointer-events: none;
-    -webkit-appearance: none; margin: 0; z-index: 2; height: 36px;
+    -webkit-appearance: none; appearance: none;
+    position: absolute; left: 0; width: 100%; height: 30px;
+    background: none; pointer-events: none; margin: 0;
 }
 .dual-range-container input[type=range]::-webkit-slider-thumb {
-    pointer-events: auto; width: 20px; height: 20px; border-radius: 50%;
-    background: var(--primary); border: 3px solid #fff; cursor: pointer;
-    -webkit-appearance: none; box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    -webkit-appearance: none; appearance: none;
+    width: 13px; height: 21px; border-radius: 1px;
+    background: var(--paper-2);
+    border: 1px solid var(--ink-2);
+    box-shadow: inset 0 0 0 3px var(--paper-2), inset 0 0 0 4px var(--line-2);
+    pointer-events: auto; cursor: ew-resize;
+    transition: border-color 0.15s;
 }
-.dual-range-container input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+.dual-range-container input[type=range]::-webkit-slider-thumb:hover { border-color: var(--jade); }
+.dual-range-container input[type=range]::-moz-range-thumb {
+    width: 11px; height: 19px; border-radius: 1px;
+    background: var(--paper-2); border: 1px solid var(--ink-2);
+    pointer-events: auto; cursor: ew-resize;
+}
 
-/* ===== 图表（固定高度，避免首屏 CLS 抖动） ===== */
-.chart-box { position: relative; height: 220px; margin-top: 8px; }
-.chart-box.small { height: 140px; }
-.chart-box canvas { display: block; width: 100%; height: 100%; }
+/* ===== 趋势图：两张并排 + 一张通栏 ===== */
+.trend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
-/* 合并后的手动/自动调控面板 */
-.control-sub-hd { font-size: 13px; font-weight: 700; color: #3B6B4A; margin: 2px 0 10px; }
-.control-divider { height: 1px; background: #E2E8E2; margin: 16px 0; }
+.trend-title, .trend-sub-title {
+    font-size: 11.5px; color: var(--ink-3); letter-spacing: 0.06em;
+    font-family: var(--font-num); font-weight: 600;
+}
+.trend-sub-title { margin: 16px 0 4px; }
 
-/* 实时趋势：水位 / 土壤湿度 左右分开 */
-.trend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
-.trend-title { font-size: 12px; color: #7A8A80; font-weight: 600; margin-bottom: 4px; }
-.trend-sub-title { font-size: 12px; color: #7A8A80; font-weight: 600; margin-top: 18px; margin-bottom: 4px; }
-/* RORI 二维近似值说明：诚实性提示，弱化但可读，不用醒目告警色 */
+.chart-box {
+    position: relative; height: 208px; margin-top: 6px;
+    border: 1px solid var(--line);
+    background: var(--paper-2);
+    padding: 8px 6px 4px;
+}
+.chart-box.small { height: 132px; }
+.chart-box canvas { display: block; width: 100% !important; height: 100% !important; }
+
 .rori-approx-note {
-    margin: 8px 0 0; padding: 7px 10px;
-    font-size: 12px; line-height: 1.5; color: #8A6D3B;
-    background: #FDF6E7; border-left: 3px solid #E8A33D; border-radius: 4px;
+    margin-top: 8px; font-size: 11px; line-height: 1.6;
+    color: #6B5A34; letter-spacing: 0.02em;
+}
+.rori-approx-note:not([hidden]) { display: block; }
+
+/* ===== 日志：固定视窗内滚动，不撑破卡片 ===== */
+.log-stretch { flex: 0 0 auto; }
+.log-stretch .section-bd { padding-bottom: 8px; }
+.log-stretch .log-scroll { height: 236px; overflow-y: auto; }
+.log-item { border-left-width: 2px; padding: 5px 8px 5px 10px; }
+.log-item .log-time { font-variant-numeric: tabular-nums; }
+.log-item .log-msg { font-size: 12.5px; }
+
+/* ===== 窄屏：读数两列、雨情三列 ===== */
+@media (max-width: 1180px) {
+    .sensor-grid { grid-template-columns: repeat(2, 1fr); }
+    .sensor-cell:nth-child(3n) { border-right: 1px solid var(--line); }
+    .sensor-cell:nth-child(2n) { border-right: none; }
+    .sensor-cell:nth-child(n+4) { border-bottom: 1px solid var(--line); }
+    .sensor-cell:nth-child(n+5) { border-bottom: none; }
+    .fc-grid { grid-template-columns: repeat(3, 1fr); }
+    .fc-item:nth-child(3n) { border-right: none; }
+    .fc-item:nth-child(-n+3) { border-bottom: 1px solid var(--line); }
+    .trend-grid { grid-template-columns: 1fr; }
 }
 
-/* 窄屏：趋势图单列 */
 @media (max-width: 900px) {
-    .trend-grid { grid-template-columns: 1fr; }
-    .fc-grid { grid-template-columns: repeat(3, 1fr); }
+    .sensor-grid { grid-template-columns: 1fr 1fr; }
+    .rori-val { font-size: 38px; }
+    .chart-box { height: 180px; }
+    .risk-scale { flex-wrap: wrap; }
 }

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>青禾智灌</title>
+    <title>青禾智灌 · 田间监控台</title>
     <!-- 第三方库：defer 避免阻塞首屏解析；crossorigin + SRI 兼容 CDN 完整性校验 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.1/socket.io.min.js"
             defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -19,17 +19,22 @@
 
 <div class="topbar">
     <div class="topbar-left">
+        <svg class="topbar-mark" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 21V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M12 12C9 12 6 10.5 6 6.5C10 6.5 12 8.5 12 12Z" fill="currentColor" opacity=".85"/>
+            <path d="M12 9C15 9 18 7.5 18 3.5C14 3.5 12 5.5 12 9Z" fill="currentColor" opacity=".55"/>
+        </svg>
         <span class="topbar-logo">青禾智灌</span>
-        <span class="topbar-title">实时监控中心</span>
+        <span class="topbar-title">田间监控台</span>
     </div>
     <div class="topbar-right">
         <div class="topbar-time">
-            <div class="date" id="sysDate">--</div>
-            <div class="time" id="sysTime">--:--:--</div>
+            <span class="date" id="sysDate">--</span>
+            <span class="time" id="sysTime">--:--:--</span>
         </div>
-        <button class="topbar-btn" onclick="openInsight()">智能洞察</button>
+        <button class="topbar-btn topbar-btn--accent" onclick="openInsight()">智能洞察</button>
         <button class="topbar-btn" onclick="openModal('chatModal')">AI 助手</button>
-        <button class="topbar-btn topbar-btn-outline" onclick="openModal('configModal')">系统设置</button>
+        <button class="topbar-btn" onclick="openModal('configModal')">系统设置</button>
         <div class="status-col">
             <div class="status-pill" id="cloudStatus"><span class="status-dot dot-gray"></span>华为云：未连接</div>
             <div class="status-pill" id="deviceStatusPill"><span class="status-dot dot-gray"></span>传感器：未连接</div>
@@ -42,15 +47,18 @@
 
 <div class="main-wrap">
     <div class="left-col">
+
+        <!-- 田间小气候 -->
         <div class="section">
-            <div class="section-hd">田间区域气象</div>
+            <div class="section-hd">田间小气候</div>
             <div class="section-bd" style="padding:0;">
                 <div class="weather-bar">
-                    <div>
+                    <div class="wx-loc">
+                        <div class="wx-eyebrow">观测点</div>
                         <div class="loc" id="locDisplay">未配置坐标</div>
                         <div class="loc-sub" id="locSubDisplay">请在设置中填入农田坐标</div>
                     </div>
-                    <div style="text-align:right;">
+                    <div class="wx-temp">
                         <div class="temp" id="tempDisplay">--°C</div>
                         <div class="hum">空气湿度 <span id="humidityDisplay">--</span>%</div>
                     </div>
@@ -58,51 +66,80 @@
             </div>
         </div>
 
+        <!-- 四路传感读数 -->
         <div class="section panel-disabled" id="sensorPanel">
-            <div class="section-hd">传感器实时数据</div>
+            <div class="section-hd">田间四路读数</div>
             <div class="section-bd">
                 <div class="sensor-grid">
-                    <div class="sensor-cell">
-                        <div class="label">渠道水位(WaterLevel)</div>
-                        <div class="value" id="waterDisplay">--<span class="unit">mm</span></div>
+                    <div class="sensor-cell sensor-cell--water">
+                        <div class="sensor-head">
+                            <span class="sensor-name">渠道水位</span>
+                            <span class="sensor-en">LEVEL</span>
+                        </div>
+                        <div class="sensor-read"><span class="value" id="waterDisplay">--</span><span class="unit">mm</span></div>
+                        <div class="sensor-scale" aria-hidden="true"></div>
                     </div>
-                    <div class="sensor-cell">
-                        <div class="label">土壤湿度(Humidity)</div>
-                        <div class="value" id="soilDisplay">--<span class="unit">%</span></div>
+                    <div class="sensor-cell sensor-cell--soil">
+                        <div class="sensor-head">
+                            <span class="sensor-name">土壤湿度</span>
+                            <span class="sensor-en">SOIL</span>
+                        </div>
+                        <div class="sensor-read"><span class="value" id="soilDisplay">--</span><span class="unit">%</span></div>
+                        <div class="sensor-scale" aria-hidden="true"></div>
                     </div>
-                    <div class="sensor-cell">
-                        <div class="label">根区溶解氧含量(DO)</div>
-                        <div class="value" id="doDisplay">--<span class="unit">mg/L</span></div>
+                    <div class="sensor-cell sensor-cell--do">
+                        <div class="sensor-head">
+                            <span class="sensor-name">根区溶解氧</span>
+                            <span class="sensor-en">DO</span>
+                        </div>
+                        <div class="sensor-read"><span class="value" id="doDisplay">--</span><span class="unit">mg/L</span></div>
+                        <div class="sensor-scale" aria-hidden="true"></div>
                     </div>
-                    <div class="sensor-cell">
-                        <div class="label">根区氧化还原电位(Eh)</div>
-                        <div class="value" id="ehDisplay">--<span class="unit">mV</span></div>
+                    <div class="sensor-cell sensor-cell--eh">
+                        <div class="sensor-head">
+                            <span class="sensor-name">根区氧化还原电位</span>
+                            <span class="sensor-en">Eh</span>
+                        </div>
+                        <div class="sensor-read"><span class="value" id="ehDisplay">--</span><span class="unit">mV</span></div>
+                        <div class="sensor-scale" aria-hidden="true"></div>
                     </div>
-                    <div class="sensor-cell">
-                        <div class="label">气泵状态</div>
-                        <div class="value status" id="deviceStatus">无信号</div>
+                    <div class="sensor-cell sensor-cell--state">
+                        <div class="sensor-head">
+                            <span class="sensor-name">气泵</span>
+                            <span class="sensor-en">AIR PUMP</span>
+                        </div>
+                        <div class="sensor-read"><span class="value status" id="deviceStatus">无信号</span></div>
                     </div>
-                    <div class="sensor-cell">
-                        <div class="label">水泵状态</div>
-                        <div class="value status" id="waterPumpStatus">无信号</div>
+                    <div class="sensor-cell sensor-cell--state">
+                        <div class="sensor-head">
+                            <span class="sensor-name">水泵</span>
+                            <span class="sensor-en">WATER PUMP</span>
+                        </div>
+                        <div class="sensor-read"><span class="value status" id="waterPumpStatus">无信号</span></div>
                     </div>
                 </div>
 
                 <div class="rori-row">
-                    <div>
-                        <div class="rori-title">根区缺氧风险指数 (RORI)</div>
+                    <div class="rori-info">
+                        <div class="rori-title">根区缺氧风险指数 · RORI</div>
                         <div class="rori-status" id="roriStatus">设备离线</div>
+                        <div class="risk-scale" aria-hidden="true">
+                            <span class="risk-zone risk-idle">待机 &lt;40</span>
+                            <span class="risk-zone risk-pulse">脉冲 40–70</span>
+                            <span class="risk-zone risk-full">满载 ≥70</span>
+                        </div>
                     </div>
                     <div class="rori-gauge-wrap">
-                        <div class="rori-val" id="roriDisplay">--</div>
+                        <span class="rori-val" id="roriDisplay">--</span>
                         <span class="rori-unit">/ 100</span>
                     </div>
                 </div>
             </div>
         </div>
 
+        <!-- 六日降雨 -->
         <div class="section">
-            <div class="section-hd">未来6日降雨量预测</div>
+            <div class="section-hd">未来六日降雨</div>
             <div class="section-bd">
                 <div class="fc-grid" id="forecastGrid">
                     <div class="fc-empty">模型加载中...</div>
@@ -111,6 +148,7 @@
             </div>
         </div>
 
+        <!-- 告警 -->
         <div class="section">
             <div class="section-hd">告警记录</div>
             <div class="section-bd">
@@ -122,8 +160,10 @@
     </div>
 
     <div class="right-col">
+
+        <!-- 调控与阈值 -->
         <div class="section panel-disabled" id="controlPanel">
-            <div class="section-hd">手动调控模式</div>
+            <div class="section-hd">调控与阈值</div>
             <div class="section-bd">
                 <div class="control-sub-hd">设备手动调控</div>
                 <div id="manualControlGroup" class="control-group-disabled">
@@ -142,7 +182,7 @@
                         </div>
                     </div>
                 </div>
-                <button id="modeToggleBtn" class="btn-wide" style="background:#C8903F;color:white;" onclick="toggleMode()">切换至 手动接管模式</button>
+                <button id="modeToggleBtn" class="btn-wide btn-wide--accent" onclick="toggleMode()">切换至 手动接管模式</button>
 
                 <div id="autoThresholdArea" class="control-group-disabled">
                     <div class="control-divider"></div>
@@ -174,11 +214,12 @@
 
                     <div id="thresholdFusionHint" class="notice"></div>
 
-                    <button class="btn-wide" style="background:#3B6B4A;color:white;margin-top:16px;" onclick="applyThresholds()">应用参数</button>
+                    <button class="btn-wide" onclick="applyThresholds()">应用参数</button>
                 </div>
             </div>
         </div>
 
+        <!-- 运行日志 -->
         <div class="section log-stretch">
             <div class="section-hd">运行日志</div>
             <div class="section-bd">
@@ -189,6 +230,7 @@
         </div>
     </div>
 
+    <!-- 实时趋势 -->
     <div class="section full-span">
         <div class="section-hd">实时趋势
             <div class="hd-right"><button id="chartTypeBtn" class="chart-toggle" onclick="toggleChartType()">柱状图</button></div>
@@ -212,7 +254,7 @@
 </div>
 
 <div class="footer">
-    青禾智灌 &copy; 2026
+    青禾智灌 © 2026　田间水位 · 根区氧位 · 雨情前馈
 </div>
 
 <div id="configModal" class="modal-overlay hidden">
@@ -281,8 +323,8 @@
             <input type="text" id="cfgWebhookUrl" placeholder="https://oapi.dingtalk.com/robot/send?access_token=...">
         </div>
         <div class="cfg-actions">
-            <button class="btn-wide" style="background:#3B6B4A;color:white;" onclick="saveConfig()">保存设置</button>
-            <button class="btn-wide btn-danger" style="color:white;border:none;" onclick="window.location.href='/api/logout'">退出登录</button>
+            <button class="btn-wide" onclick="saveConfig()">保存设置</button>
+            <button class="btn-wide btn-danger" onclick="window.location.href='/api/logout'">退出登录</button>
         </div>
     </div>
 </div>
@@ -306,8 +348,8 @@
             <input type="password" id="confirmPassword" placeholder="请再次输入新密码">
         </div>
         <div class="cfg-actions">
-            <button class="btn-wide" style="background:#3B6B4A;color:white;" onclick="changePassword()">确认修改</button>
-            <button class="btn-wide" style="background:#E8EDE9;color:#55665C;border:none;" onclick="closeModal('pwdModal')">取消</button>
+            <button class="btn-wide" onclick="changePassword()">确认修改</button>
+            <button class="btn-wide btn-quiet" onclick="closeModal('pwdModal')">取消</button>
         </div>
     </div>
 </div>
@@ -315,7 +357,7 @@
 <div id="chatModal" class="modal-overlay hidden">
     <div class="modal-box ai-chat-box">
         <div class="modal-hd">
-            <h2>AI助手</h2>
+            <h2>AI 助手</h2>
             <button onclick="closeModal('chatModal')">✕</button>
         </div>
         <div class="chat-history" id="chatHistory">
