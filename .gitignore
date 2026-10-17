@@ -1,4 +1,4 @@
-﻿# Python
+# Python
 __pycache__/
 *.py[cod]
 .venv/
@@ -13,6 +13,8 @@ venv/
 # 敏感凭据
 api key.txt
 esp_secrets.txt
+.env
+.env.local
 
 # 文档产物（体积大，按需再决定是否入库）
 docs/_raw/

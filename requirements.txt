@@ -1,0 +1,22 @@
+# 青禾智灌智慧灌溉管理平台 —— Python 依赖
+# 安装：pip install -r requirements.txt
+# 说明：使用 >= 下限而非钉死版本，便于在校园网机器上快速装通；
+#      如需完全可复现，可执行 `pip freeze > requirements.lock.txt`。
+
+# --- Web 框架与实时通信 ---
+flask>=3.0
+flask-socketio>=5.3
+# SocketIO 的客户端依赖（长轮询传输），waitress 场景下必须
+python-socketio>=5.10
+python-engineio>=4.8
+
+# --- 生产 WSGI 服务器（纯 Python，Windows 友好，多线程）---
+waitress>=3.0
+
+# --- 业务依赖 ---
+pyjwt>=2.8
+paho-mqtt>=2.0
+requests>=2.31
+
+# --- 测试 ---
+pytest>=8.0
