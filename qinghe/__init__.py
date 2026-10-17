@@ -54,6 +54,9 @@ def _register_blueprints(app: Flask) -> None:
         auth_routes,
         config_routes,
         data_routes,
+        export_routes,
+        insight_routes,
+        monitor_routes,
     )
 
     app.register_blueprint(app_routes.bp)
@@ -61,6 +64,9 @@ def _register_blueprints(app: Flask) -> None:
     app.register_blueprint(config_routes.bp)
     app.register_blueprint(data_routes.bp)
     app.register_blueprint(ai_routes.bp)
+    app.register_blueprint(insight_routes.bp)
+    app.register_blueprint(export_routes.bp)
+    app.register_blueprint(monitor_routes.bp)
 
 
 def _register_error_handlers(app: Flask) -> None:

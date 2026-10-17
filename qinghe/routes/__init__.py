@@ -9,6 +9,9 @@ from qinghe.routes import (  # noqa: F401
     auth_routes,
     config_routes,
     data_routes,
+    export_routes,
+    insight_routes,
+    monitor_routes,
 )
 
 __all__ = [
@@ -17,4 +20,7 @@ __all__ = [
     'auth_routes',
     'config_routes',
     'data_routes',
+    'export_routes',
+    'insight_routes',
+    'monitor_routes',
 ]
