@@ -138,3 +138,12 @@ def test_index_uses_vendored_assets_not_cdn(index_html):
     # Leaflet 的图片资源与 css 同目录，缺了会退化成破图标
     for rel in ("images/marker-icon.png", "images/marker-shadow.png"):
         assert (STATIC / "vendor" / "leaflet" / rel).is_file(), "缺少 Leaflet 图标：%s" % rel
+
+
+def test_templates_declare_favicon():
+    """三个页面都要声明站点图标，否则浏览器会向 /favicon.ico 发 404 请求。"""
+    assert (STATIC / "favicon.svg").is_file(), "缺少 static/favicon.svg"
+    for name in ("index.html", "login.html", "knowledge.html"):
+        html = _read(TEMPLATES / name)
+        assert "favicon.svg" in html, "%s 未声明 favicon" % name
+        assert 'rel="icon"' in html, "%s 缺少 rel=icon" % name
