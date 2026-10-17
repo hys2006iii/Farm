@@ -10,11 +10,9 @@ from flask_socketio import join_room
 
 from qinghe import iot
 
-#: 允许下发的设备白名单，防止任意属性透传
-PROP_MAP = {
-    'water_pump': 'water_pump',
-    'air_pump': 'air_pump',
-}
+#: 允许下发的设备白名单，防止任意属性透传。
+#: 唯一来源在 `qinghe.iot.PROP_MAP`，此处仅做别名，新增设备只改 iot.py。
+PROP_MAP = iot.PROP_MAP
 
 
 def emit_hw_data(uid, payload) -> None:

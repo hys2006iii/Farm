@@ -193,6 +193,13 @@ def flush_history() -> int:
 #: 历史采样需要的两个字段（华为云物模型属性名）
 HISTORY_FIELDS = ('waterlevel', 'humidity')
 
+#: 允许下发的设备白名单（唯一来源）：HTTP `/api/app_send_command` 与 SocketIO
+#: `send_command` 都从这里取，新增设备只改这一处。
+PROP_MAP = {
+    'water_pump': 'water_pump',
+    'air_pump': 'air_pump',
+}
+
 
 def parse_mqtt_payload(topic: str, content: str):
     """解析 MQTT 报文。

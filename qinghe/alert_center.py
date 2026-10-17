@@ -283,7 +283,12 @@ def prune_alerts(keep_days: int = 7) -> int:
 
 
 def _code_for_message(message: str, level: str) -> str:
-    """把 `evaluate_alerts()` 的中文正文映射为契约告警类型码。"""
+    """把告警正文映射为契约告警类型码（**兼容回退路径**）。
+
+    优先由 `evaluate_and_push()` 直接取 `evaluate_alerts()` 结果里的稳定 `code`；
+    仅当候选没有 `code`（例如外部自行构造的候选）时才走这里的中文文案前缀匹配。
+    文案一旦改写，回退映射会失效，因此新代码应始终传 `code`。
+    """
     if message.startswith('土壤湿度过低'):
         return 'soil_low'
     if message.startswith('土壤湿度过高'):
@@ -295,6 +300,14 @@ def _code_for_message(message: str, level: str) -> str:
     if message.startswith('RORI'):
         return 'rori_high' if level == 'danger' else 'rori_medium'
     return 'auto_action'
+
+
+def _code_of(item: dict, message: str, level: str) -> str:
+    """取候选告警的类型码：优先稳定 `code` 字段，缺失才回退文案映射。"""
+    code = str(item.get('code') or '').strip()
+    if code in ALERT_CODES:
+        return code
+    return _code_for_message(message, level)
 
 
 def evaluate_and_push(uid: int, soil_pct, water_mm, rori, humi_lower, humi_upper,
@@ -315,7 +328,7 @@ def evaluate_and_push(uid: int, soil_pct, water_mm, rori, humi_lower, humi_upper
     for item in candidates or []:
         level = _normalize_level(item.get('level'))
         message = str(item.get('msg') or '')
-        code = _code_for_message(message, level)
+        code = _code_of(item, message, level)
         result = push_alert(uid, level, code, message)
         if result.get('deduped'):
             continue

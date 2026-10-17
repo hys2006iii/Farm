@@ -73,21 +73,27 @@ def evaluate_alerts(soil_pct, water_mm, humi_lower, humi_upper,
         rori:        RORI 指数（0~100），None 表示不可用
 
     返回:
-        [{'level': 'warn'|'danger', 'msg': '...'}, ...]
+        [{'level': 'warn'|'danger', 'code': '...', 'msg': '...'}, ...]
+
+    其中 `code` 是稳定类型码（`soil_low` / `soil_high` / `water_high` /
+    `rori_medium` / `rori_high`），供 `alert_center` 直接落库，**不依赖中文文案**，
+    因此调整文案不会改变告警分类。
     """
     items = []
     if soil_pct < humi_lower:
-        items.append({'level': 'warn',
+        items.append({'level': 'warn', 'code': 'soil_low',
                       'msg': '土壤湿度过低 %.1f%% < 下限 %.1f%%，建议补灌' % (soil_pct, humi_lower)})
     elif soil_pct > humi_upper:
-        items.append({'level': 'warn',
+        items.append({'level': 'warn', 'code': 'soil_high',
                       'msg': '土壤湿度过高 %.1f%% > 上限 %.1f%%，注意排湿' % (soil_pct, humi_upper)})
     if water_mm > water_upper:
-        items.append({'level': 'warn',
+        items.append({'level': 'warn', 'code': 'water_high',
                       'msg': '水位过高 %.1fmm > 上限 %.1fmm，注意排水' % (water_mm, water_upper)})
     if rori is not None:
         if rori >= config.RORI_HEAVY:
-            items.append({'level': 'danger', 'msg': 'RORI %.0f 重度厌氧，强制增氧' % rori})
+            items.append({'level': 'danger', 'code': 'rori_high',
+                          'msg': 'RORI %.0f 重度厌氧，强制增氧' % rori})
         elif rori >= config.RORI_MODERATE:
-            items.append({'level': 'warn', 'msg': 'RORI %.0f 中度缺氧，脉冲加气' % rori})
+            items.append({'level': 'warn', 'code': 'rori_medium',
+                          'msg': 'RORI %.0f 中度缺氧，脉冲加气' % rori})
     return items

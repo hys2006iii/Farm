@@ -7,14 +7,9 @@
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 
 from qinghe import auth, iot
+from qinghe.iot import PROP_MAP
 
 bp = Blueprint('app_api', __name__)
-
-#: 只允许白名单内的属性，防止任意下发
-PROP_MAP = {
-    'water_pump': 'water_pump',
-    'air_pump': 'air_pump',
-}
 
 
 @bp.route('/')

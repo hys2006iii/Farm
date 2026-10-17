@@ -267,10 +267,23 @@ def test_evaluate_alerts_messages_carry_numbers():
 
 
 def test_evaluate_alerts_returns_dicts_with_level_and_msg():
+    """每条候选都带 level 与 msg，且带稳定的 code 类型码（供 alert_center 落库）。"""
     items = alerts.evaluate_alerts(30.0, 200.0, 40.0, 80.0, 150.0)
+    assert items
     for item in items:
-        assert set(item) == {'level', 'msg'}
+        assert set(item) == {'level', 'code', 'msg'}
         assert item['level'] in ('warn', 'danger')
+        assert item['code'] in ('soil_low', 'soil_high', 'water_high',
+                                'rori_medium', 'rori_high')
+
+
+def test_evaluate_alerts_codes_are_stable_types():
+    """code 只由判定分支决定，与中文文案无关（改文案不改分类）。"""
+    assert [i['code'] for i in alerts.evaluate_alerts(30.0, 50.0, 40.0, 80.0, 150.0)] == ['soil_low']
+    assert [i['code'] for i in alerts.evaluate_alerts(90.0, 50.0, 40.0, 80.0, 150.0)] == ['soil_high']
+    assert [i['code'] for i in alerts.evaluate_alerts(60.0, 200.0, 40.0, 80.0, 150.0)] == ['water_high']
+    assert [i['code'] for i in alerts.evaluate_alerts(60.0, 50.0, 40.0, 80.0, 150.0, rori=50)] == ['rori_medium']
+    assert [i['code'] for i in alerts.evaluate_alerts(60.0, 50.0, 40.0, 80.0, 150.0, rori=90)] == ['rori_high']
 
 
 # ============================================================

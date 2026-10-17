@@ -74,6 +74,28 @@ def reset_login_failures() -> None:
         _login_fail.clear()
 
 
+# ------------------------------------------------------------
+# 公开限流 API：供路由层调用，避免跨模块依赖下划线私有函数
+# ------------------------------------------------------------
+
+def login_throttle(username: str) -> bool:
+    """该「用户名 + 来源 IP」当前是否已被限流锁定。
+
+    路由层统一调用本函数，不要直接依赖 `_login_locked`。
+    """
+    return _login_locked(username)
+
+
+def record_login_failure(username: str) -> None:
+    """记录一次登录失败（路由层统一入口）。"""
+    _record_login_fail(username)
+
+
+def clear_login_failures(username: str) -> None:
+    """登录成功后清空该「用户名 + 来源 IP」的失败计数。"""
+    _clear_login_fail(username)
+
+
 def is_password_hash(stored: str) -> bool:
     """判断库中存的是否已是哈希（否则视为旧库明文密码）。"""
     return bool(stored) and stored.startswith(_HASH_PREFIXES)

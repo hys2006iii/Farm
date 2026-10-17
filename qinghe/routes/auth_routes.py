@@ -36,15 +36,15 @@ def api_login():
     password = data.get('password') or ''
     if not username or not password:
         return jsonify({'status': 'error', 'message': '请输入账号和密码'})
-    if auth._login_locked(username):
+    if auth.login_throttle(username):
         return jsonify({'status': 'error', 'message': '尝试次数过多，请 10 分钟后再试'}), 429
     user, ok = auth.authenticate(username, password)
     if ok:
-        auth._clear_login_fail(username)
+        auth.clear_login_failures(username)
         session['user_id'] = user['id']
         session['username'] = user['username']
         return jsonify({'status': 'success', 'message': '登录成功'})
-    auth._record_login_fail(username)
+    auth.record_login_failure(username)
     return jsonify({'status': 'error', 'message': '账号或密码错误'})
 
 
@@ -79,11 +79,11 @@ def api_app_login():
     payload = request.json or {}
     username = (payload.get('username') or '').strip()
     password = payload.get('password') or ''
-    if auth._login_locked(username):
+    if auth.login_throttle(username):
         return jsonify({'status': 'error', 'message': '尝试次数过多，请 10 分钟后再试'}), 429
     user, ok = auth.authenticate(username, password)
     if ok:
-        auth._clear_login_fail(username)
+        auth.clear_login_failures(username)
         token = auth.issue_token(user['id'])
         iot.connect_huawei_iot(user['id'])
         return jsonify({
@@ -92,5 +92,5 @@ def api_app_login():
             'token': token,
             'username': user['username'],
         })
-    auth._record_login_fail(username)
+    auth.record_login_failure(username)
     return jsonify({'status': 'error', 'message': '账号或密码错误'})

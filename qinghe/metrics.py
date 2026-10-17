@@ -21,7 +21,7 @@ import time
 from contextlib import closing
 from datetime import date, datetime, timedelta
 
-from qinghe import db, irrigation
+from qinghe import config, db, irrigation
 
 # ============================================================
 # 一、常量与模块级状态
@@ -46,18 +46,20 @@ MAX_DAYS = 90
 _last = {}
 _last_lock = threading.Lock()
 
-#: 建表一次性标记
+#: 建表一次性标记：记录已建表的数据库路径，临时库切换时重新建表
 _schema_ready = False
+_schema_path = None
 _schema_lock = threading.Lock()
 
 
 def _ensure_schema() -> None:
-    """懒建 pump_runtime 表与索引（幂等，每个公开函数入口调用）。"""
-    global _schema_ready
-    if _schema_ready:
+    """懒建 pump_runtime 表与索引（按当前库路径幂等，每个公开函数入口调用）。"""
+    global _schema_ready, _schema_path
+    path = config.get_db_path()
+    if _schema_ready and _schema_path == path:
         return
     with _schema_lock:
-        if _schema_ready:
+        if _schema_ready and _schema_path == path:
             return
         with closing(db.get_db()) as conn:
             conn.execute(
@@ -73,6 +75,7 @@ def _ensure_schema() -> None:
                 'CREATE INDEX IF NOT EXISTS idx_pump_runtime_user_day ON pump_runtime(user_id, day)'
             )
             conn.commit()
+        _schema_path = path
         _schema_ready = True
 
 
