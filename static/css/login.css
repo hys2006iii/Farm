@@ -245,6 +245,96 @@ body.login-page {
     font-size: 10.5px; letter-spacing: 0.16em; color: #9B988A;
 }
 
+/* ===== 登录后地块选择 =====
+   覆盖在 .form-frame 之上，沿用纸面卡片几何，避免布局跳动 */
+.hidden { display: none !important; }
+
+.farm-chooser {
+    position: relative;
+    width: 100%;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    background: var(--paper-2);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 34px 32px 26px;
+    box-shadow: 0 16px 44px rgba(24, 36, 32, 0.07);
+}
+.farm-chooser::before {
+    /* 与登录卡片同款的左上墨线版口 */
+    content: "";
+    position: absolute; left: -1px; top: -1px;
+    width: 52px; height: 3px;
+    background: var(--jade);
+}
+
+.chooser-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.chooser-head h2 {
+    font-family: var(--font-serif);
+    font-size: 25px; font-weight: 700; letter-spacing: 0.14em; color: var(--ink);
+}
+.chooser-sub {
+    margin: 12px 0 20px;
+    font-size: 12px; line-height: 1.85; letter-spacing: 0.02em;
+    color: var(--ink-3);
+}
+
+/* 列表：纸面底 + 细分割线，行内不放圆角卡片 */
+.chooser-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    margin-bottom: 18px;
+    border-top: 1px solid var(--line);
+}
+.chooser-list::-webkit-scrollbar { width: 6px; }
+.chooser-list::-webkit-scrollbar-thumb { background: var(--line-2); border-radius: 3px; }
+
+.chooser-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 10px 11px 8px;
+    border-bottom: 1px solid var(--line);
+    border-left: 3px solid transparent;
+    cursor: pointer;
+    transition: background-color 0.15s, border-left-color 0.15s;
+}
+.chooser-row:hover { background: var(--paper-3); }
+.chooser-row:focus-visible { outline: 2px solid var(--gold); outline-offset: -2px; }
+
+/* 选中态：左侧 3px 玉青竖条 + 淡玉青底 */
+.chooser-row.is-selected {
+    background: #E6EDE6;
+    border-left-color: var(--jade);
+}
+.chooser-row.is-selected .chooser-name { color: var(--jade); }
+
+.chooser-no {
+    flex: 0 0 auto;
+    font-family: var(--font-num);
+    font-size: 10.5px; letter-spacing: 0.06em;
+    color: var(--ink-3);
+}
+.chooser-row.is-selected .chooser-no { color: var(--jade); }
+
+.chooser-body { flex: 1 1 auto; min-width: 0; }
+.chooser-name {
+    font-size: 13.5px; font-weight: 600; letter-spacing: 0.04em;
+    color: var(--ink);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.chooser-meta {
+    margin-top: 3px;
+    font-family: var(--font-num);
+    font-size: 10.5px; letter-spacing: 0.04em;
+    color: var(--ink-3);
+}
+
+/* 覆盖层里的按钮不再重复上外边距 */
+#farmEnterBtn { margin-top: 0; letter-spacing: 0.24em; text-indent: 0.24em; }
+.farm-chooser .login-btn { margin-top: 0; }
+.farm-chooser .login-extra { margin-top: 16px; }
+
 /* ===== 响应式 ===== */
 @media (max-width: 900px) {
     .login-shell { grid-template-columns: 1fr; }
@@ -254,4 +344,5 @@ body.login-page {
     .brand-foot { margin-top: 18px; padding-top: 12px; }
     .form-panel { padding: 34px 20px 30px; justify-content: flex-start; }
     .login-card { padding: 32px 24px 26px; }
+    .farm-chooser { padding: 26px 20px 22px; }
 }

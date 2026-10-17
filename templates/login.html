@@ -102,6 +102,23 @@
                 </div>
             </section>
 
+            <!-- 登录成功后的地块选择：多地块账号先选田块，再进监控台 -->
+            <section class="farm-chooser hidden" id="farmChooser" aria-hidden="true">
+                <header class="chooser-head">
+                    <h2>选择地块</h2>
+                    <span class="card-en">SELECT PLOT</span>
+                </header>
+                <p class="chooser-sub">登录成功，请选择要查看的田块</p>
+
+                <div class="chooser-list" id="farmChooserList" role="listbox" aria-label="地块列表"></div>
+
+                <button class="login-btn" id="farmEnterBtn" onclick="enterFarm()">进入监控台</button>
+
+                <div class="login-extra">
+                    <a href="javascript:void(0)" onclick="alert('进入监控台后，可在「地块管理」中新增、编辑或删除地块');">管理地块</a>
+                </div>
+            </section>
+
         </div>
         <div class="form-foot">青禾智灌 © 2026　智能灌溉管理平台</div>
     </main>
