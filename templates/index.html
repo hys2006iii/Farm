@@ -9,6 +9,11 @@
             defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
             defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- Leaflet：仅系统设置里的「地图选点 / 圈地」用到；加载失败时自动降级为手填经纬度 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
+          crossorigin="anonymous" referrerpolicy="no-referrer">
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"
+            defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <!-- 样式：按职责拆分，顺序 base -> dashboard -> modal -> insight -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
@@ -26,12 +31,23 @@
         </svg>
         <span class="topbar-logo">青禾智灌</span>
         <span class="topbar-title">田间监控台</span>
+        <!-- 当前地块：点开可快速切换（多农场功能） -->
+        <div class="farm-switch">
+            <button type="button" class="farm-chip" id="farmSwitchBtn" aria-haspopup="true" aria-expanded="false"
+                    onclick="QH_FARM.toggleMenu(event)" title="切换地块">
+                <span class="farm-chip-tag">地块</span>
+                <span class="farm-chip-name" id="farmChipName">加载中…</span>
+                <svg class="farm-chip-caret" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.4"/></svg>
+            </button>
+            <div class="farm-menu hidden" id="farmMenu" role="menu"></div>
+        </div>
     </div>
     <div class="topbar-right">
         <div class="topbar-time">
             <span class="date" id="sysDate">--</span>
             <span class="time" id="sysTime">--:--:--</span>
         </div>
+        <a class="topbar-btn" href="/knowledge">知识库</a>
         <button class="topbar-btn topbar-btn--accent" onclick="openInsight()">智能洞察</button>
         <button class="topbar-btn" onclick="openModal('chatModal')">AI 助手</button>
         <button class="topbar-btn" onclick="openModal('configModal')">系统设置</button>
@@ -44,6 +60,30 @@
 
 <div id="ongoingAlertBanner" class="alert-banner hidden">状态排查中...</div>
 <div class="toast-container" id="toastContainer"></div>
+
+<!-- 概览带：一屏看清「该不该灌、雨来不来、用了多少水、有没有告警」 -->
+<div class="kpi-strip" id="kpiStrip">
+    <div class="kpi">
+        <div class="kpi-label">今日建议</div>
+        <div class="kpi-value" id="kpiAdvice">—</div>
+        <div class="kpi-sub" id="kpiAdviceSub">正在读取墒情…</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">未来 6 日累计雨</div>
+        <div class="kpi-value" id="kpiRain">—</div>
+        <div class="kpi-sub" id="kpiRainSub">毫米 · 未取到预报</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">近 7 日灌溉用水</div>
+        <div class="kpi-value" id="kpiWater">—</div>
+        <div class="kpi-sub" id="kpiWaterSub">升 · 按水位抬升折算</div>
+    </div>
+    <div class="kpi">
+        <div class="kpi-label">未确认告警</div>
+        <div class="kpi-value" id="kpiAlerts">—</div>
+        <div class="kpi-sub" id="kpiAlertsSub">条 · 服务端告警中心</div>
+    </div>
+</div>
 
 <div class="main-wrap">
     <div class="left-col">
@@ -137,14 +177,21 @@
             </div>
         </div>
 
-        <!-- 六日降雨 -->
+        <!-- 七日记雨 + 灌溉建议 -->
         <div class="section">
-            <div class="section-hd">未来六日降雨</div>
+            <div class="section-hd">未来七日雨情与灌溉建议</div>
             <div class="section-bd">
                 <div class="fc-grid" id="forecastGrid">
                     <div class="fc-empty">模型加载中...</div>
                 </div>
                 <div id="forecastSummary" class="notice"></div>
+                <div class="advice-week" id="adviceWeek">
+                    <div class="advice-week-hd">
+                        <span class="advice-week-title">逐日建议</span>
+                        <span class="advice-week-sub" id="adviceWeekSub">按当前墒情与 6 日报雨推算</span>
+                    </div>
+                    <div class="advice-days" id="adviceDays"></div>
+                </div>
             </div>
         </div>
 
@@ -278,6 +325,46 @@
             <div class="cfg-row"><label>经度</label><input type="number" step="0.000001" id="cfgFarmLng"></div>
             <div class="cfg-row"><label>纬度</label><input type="number" step="0.000001" id="cfgFarmLat"></div>
         </div>
+
+        <!-- 地块管理：地图选点 / 圈地 + 多地块增删改切 -->
+        <div class="cfg-block" id="farmBlock">
+            <div class="cfg-block-hd">
+                <h3>地块管理</h3>
+                <span class="cfg-block-sub">一个账号可以管多块地，看板与 AI 都按「当前地块」计算</span>
+            </div>
+
+            <div class="farm-map-tools">
+                <button type="button" class="btn-link" id="mapPickBtn" onclick="QH_FARM.setMapMode('pick')">地图选点</button>
+                <button type="button" class="btn-link" id="mapPolyBtn" onclick="QH_FARM.setMapMode('poly')">圈出边界</button>
+                <button type="button" class="btn-link" id="mapUndoBtn" onclick="QH_FARM.undoPolyPoint()">撤回一点</button>
+                <button type="button" class="btn-link" id="mapClearBtn" onclick="QH_FARM.clearPoly()">清除边界</button>
+                <span class="farm-map-hint" id="farmMapHint">在地图上点一下即取该点经纬度；圈地模式下逐点点击勾出田块边界</span>
+            </div>
+            <div class="farm-map" id="farmMap" role="application" aria-label="地块位置地图"></div>
+            <div class="farm-map-fallback" id="farmMapFallback" hidden>
+                地图底图未加载（离线或瓦片不可达），可直接在上方填写经纬度。
+            </div>
+            <p class="farm-map-note">底图为高德卫星影像（GCJ-02 坐标），与气象接口使用的 WGS84 有百米级偏差，定位到田块够用。</p>
+
+            <div class="farm-summary">
+                <span class="farm-summary-item">当前地块：<b id="farmCurrentName">—</b></span>
+                <span class="farm-summary-item">面积估算：<b id="farmAreaText">—</b></span>
+                <span class="farm-summary-item">边界点数：<b id="farmPolyCount">0</b></span>
+            </div>
+
+            <div class="farm-newrow">
+                <input type="text" id="newFarmName" placeholder="新地块名称，如 西二垄试验田" maxlength="24">
+                <button type="button" class="btn-wide" id="newFarmBtn" onclick="QH_FARM.saveAsNew()">另存为新地块</button>
+            </div>
+
+            <div class="farm-list" id="farmList"></div>
+            <div class="cfg-actions left">
+                <button type="button" class="btn-wide" onclick="QH_FARM.saveCurrent()">保存地块信息</button>
+                <span class="farm-map-hint">改了名称 / 经纬度 / 边界后点这里写入当前地块（上方「保存设置」只管设备与接口配置）</span>
+            </div>
+            <div class="farm-note">切换地块会同步更新看板、AI 快照与灌溉建议；删除前请确认该地块不再使用。</div>
+        </div>
+
         <div class="cfg-row">
             <label>MQTT 接入 Host</label>
             <input type="text" id="cfgIotHost" placeholder="如 xxxxxxxxxxxxxx.cn-north-4.myhuaweicloud.com">
@@ -322,6 +409,30 @@
             <label>钉钉Webhook告警URL</label>
             <input type="text" id="cfgWebhookUrl" placeholder="https://oapi.dingtalk.com/robot/send?access_token=...">
         </div>
+
+        <!-- 演示数据：没有实体主板时用同一套 MQTT 链路灌入遥测（需服务端开启 FARM_DEV_SIM=1） -->
+        <div class="cfg-block" id="simBlock" hidden>
+            <div class="cfg-block-hd">
+                <h3>演示数据（无硬件调试）</h3>
+                <span class="cfg-block-sub">走真实遥测链路：落历史库、算 RORI、触发告警，仅用于演示与自测</span>
+            </div>
+            <div class="cfg-grid">
+                <div class="cfg-row"><label>场景</label>
+                    <select id="simScenario">
+                        <option value="normal">常规一天</option>
+                        <option value="drought">持续干旱</option>
+                        <option value="anaerobic">根区缺氧</option>
+                        <option value="storm">强降雨前后</option>
+                    </select>
+                </div>
+                <div class="cfg-row"><label>采样点数（1–240）</label><input type="number" id="simSamples" value="48" min="1" max="240"></div>
+            </div>
+            <div class="cfg-actions left">
+                <button type="button" class="btn-wide" id="simRunBtn" onclick="QH_FARM.runSimulation()">灌入演示数据</button>
+                <span class="farm-map-hint" id="simHint"></span>
+            </div>
+        </div>
+
         <div class="cfg-actions">
             <button class="btn-wide" onclick="saveConfig()">保存设置</button>
             <button class="btn-wide btn-danger" onclick="window.location.href='/api/logout'">退出登录</button>
@@ -362,6 +473,7 @@
         </div>
         <div class="chat-history" id="chatHistory">
             <div class="chat-bubble chat-ai">我是青禾智灌农业水利工程AI专家，关于灌溉调控、设备操作的问题，可以在这里向我提问，我会尽量帮你解答。</div>
+            <div class="chat-bubble chat-ai chat-snapshot-note" id="chatSnapshotNote">提问时会自动附带当前地块的四路读数、RORI、阈值与雨情快照，回答基于实时数据而不是泛泛而谈。</div>
         </div>
         <div class="chat-input-area">
             <input type="text" id="chatInput" placeholder="输入问题..." onkeypress="if(event.key==='Enter') sendChat();">
@@ -448,5 +560,7 @@
 <script src="{{ url_for('static', filename='js/realtime.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/insight.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/advice.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/farm.js') }}" defer></script>
 </body>
 </html>

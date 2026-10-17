@@ -186,6 +186,8 @@
         // 5) SocketIO 实时数据
         REALTIME.initSocket();
         REALTIME.refreshStatus();
+        // 刷新页面后先补一帧服务端最新遥测，避免读数空白而图表有数据
+        if (typeof REALTIME.loadLatest === 'function') REALTIME.loadLatest();
 
         addLog('系统已启动，正在连接云平台...', 'log-info');
     }

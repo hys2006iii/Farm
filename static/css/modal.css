@@ -141,12 +141,111 @@
 .cfg-actions { display: flex; gap: 10px; margin-top: 20px; }
 
 /* 危险操作走印章朱红 */
-.cfg-actions .btn-danger {
-    background: var(--seal); border: 1px solid var(--seal); color: var(--paper-2);
+.cfg-actions .btn-danger {    background: var(--seal); border: 1px solid var(--seal); color: var(--paper-2);
 }
 .cfg-actions .btn-danger:hover { background: #93382A; border-color: #93382A; }
+.cfg-actions.left { justify-content: flex-start; align-items: center; margin-top: 10px; }
+
+/* ===== 设置页分组（地块管理 / 演示数据） ===== */
+.cfg-block {
+    margin: 16px 0 18px; padding: 14px 14px 12px;
+    border: 1px solid var(--line); border-radius: 2px;
+    background: var(--paper-3);
+}
+.cfg-block-hd { margin-bottom: 10px; }
+.cfg-block-hd h3 {
+    display: flex; align-items: center;
+    font-family: var(--font-serif); font-size: 14.5px; font-weight: 600;
+    color: var(--ink); letter-spacing: 0.08em;
+}
+.cfg-block-hd h3::before {
+    content: ""; display: inline-block; width: 3px; height: 13px;
+    background: var(--jade); margin-right: 8px;
+}
+.cfg-block-sub { display: block; margin-top: 4px; font-size: 11.5px; color: var(--ink-3); line-height: 1.55; }
+
+.cfg-block select {
+    width: 100%; padding: 8px 10px; font-size: 13px;
+    border: 1px solid var(--line); border-radius: 2px;
+    background: var(--paper-2); color: var(--ink);
+    font-family: var(--font-body);
+}
+.cfg-block select:focus { outline: none; border-color: var(--jade); }
+
+/* 地图工具行 */
+.farm-map-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.farm-map-tools .btn-link {
+    background: var(--paper-2); color: var(--jade);
+    border: 1px solid var(--line-2); border-radius: 2px;
+    padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.farm-map-tools .btn-link:hover { background: var(--jade-pale); border-color: var(--jade); }
+.farm-map-tools .btn-link.is-on { background: var(--jade); border-color: var(--jade); color: var(--paper-2); }
+.farm-map-hint { font-size: 11px; color: var(--ink-3); line-height: 1.5; }
+
+.farm-map {
+    position: relative; overflow: hidden;
+    height: 260px; border: 1px solid var(--line-2); border-radius: 2px;
+    background: #E8E4D6; z-index: 1;
+}
+.farm-map--empty { background: var(--paper-3); }
+.farm-map-fallback {
+    margin-top: 6px; padding: 8px 10px;
+    border: 1px dashed var(--line-2); border-radius: 2px;
+    font-size: 11.5px; color: var(--ink-3); background: var(--paper-2);
+}
+.farm-map-fallback[hidden] { display: none; }
+.farm-map-note {
+    margin: 6px 0 0; font-size: 11px; color: var(--ink-3); line-height: 1.6;
+}
+
+.farm-summary {
+    display: flex; flex-wrap: wrap; gap: 6px 18px;
+    margin-top: 10px; font-size: 12px; color: var(--ink-2);
+}
+.farm-summary b { font-weight: 600; color: var(--ink); font-family: var(--font-num); }
+
+.farm-newrow { display: flex; gap: 8px; margin-top: 12px; }
+.farm-newrow input {
+    flex: 1; padding: 8px 10px; font-size: 13px;
+    border: 1px solid var(--line); border-radius: 2px;
+    background: var(--paper-2); color: var(--ink); font-family: var(--font-body);
+}
+.farm-newrow input:focus { outline: none; border-color: var(--jade); }
+.farm-newrow .btn-wide { width: auto; padding: 0 16px; }
+
+.farm-list { margin-top: 12px; border-top: 1px solid var(--line); }
+.farm-list-empty { padding: 12px 2px; font-size: 12px; color: var(--ink-3); }
+.farm-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 2px 9px 9px; border-bottom: 1px solid var(--line);
+    border-left: 3px solid transparent;
+}
+.farm-row.is-active { border-left-color: var(--jade); background: var(--jade-pale); }
+.farm-row-info { flex: 1; min-width: 0; }
+.farm-row-name { font-family: var(--font-serif); font-size: 13.5px; color: var(--ink); letter-spacing: 0.03em; }
+.farm-row-meta { margin-top: 2px; font-size: 11px; color: var(--ink-3); font-family: var(--font-num); }
+.farm-row-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.farm-row-actions .btn-link {
+    background: none; border: 0; padding: 4px 6px; cursor: pointer;
+    font-size: 12px; color: var(--jade); font-family: inherit;
+}
+.farm-row-actions .btn-link--danger { color: var(--seal); }
+.farm-row-actions .btn-link:hover { text-decoration: underline; }
+.farm-row-flag { font-size: 10.5px; color: var(--jade); letter-spacing: 0.12em; }
+
+.farm-note { margin-top: 10px; font-size: 11px; color: var(--ink-3); line-height: 1.6; }
+
+/* AI 对话里的「已附带实时快照」说明：比闲聊气泡弱一档 */
+.chat-snapshot-note {
+    background: var(--gold-pale); border-color: var(--line-2);
+    color: #6B5A34; font-size: 11.5px; line-height: 1.65;
+    max-width: 88%;
+}
 
 @media (max-width: 720px) {
     .modal-box, .modal-box.modal-wide, .ai-chat-box { width: calc(100vw - 32px); }
     .cfg-grid { grid-template-columns: 1fr; }
+    .farm-map { height: 200px; }
+    .farm-newrow { flex-direction: column; }
 }

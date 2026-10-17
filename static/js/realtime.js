@@ -37,10 +37,12 @@
 
         // 面板可用性：socket 已连接即可操作（命令经 MQTT 真实下发到设备）
         var wsConnected = !!(S.socket && S.socket.connected);
-        if (S.cloudConnected && S.deviceOnline) {
+        if (S.deviceOnline) {
             QH.toggleClass(sensorPanel, 'panel-disabled', false);
             QH.toggleClass(controlPanel, 'panel-disabled', false);
-            QH.setText(roriStatus, '数据同步计算中...');
+            // roriStatus 的等级文案由 updateRori() 统一写；若上一帧离线时留下的旧文案
+            // 还在，这里补算一次，避免出现「有 RORI 数值却写着设备未连接」。
+            if (roriStatus && /未连接|离线|同步计算中/.test(roriStatus.textContent || '')) updateRori();
         } else if (wsConnected) {
             QH.toggleClass(sensorPanel, 'panel-disabled', false);
             QH.toggleClass(controlPanel, 'panel-disabled', false);
@@ -63,7 +65,9 @@
     /* ---------------- RORI ---------------- */
     /** 计算并展示 RORI，同时在自动模式下执行调控决策 */
     function updateRori() {
-        if (!S.cloudConnected || !S.deviceOnline) {
+        // 只要有设备数据就算得出 RORI；华为云 MQTT 链路状态不参与此判断，
+        // 否则「服务端有遥测但 broker 未连」时刷新页面会看不到风险值。
+        if (!S.deviceOnline) {
             QH.setText(QH.$('roriDisplay'), '--');
             QH.setText(QH.$('roriStatus'), '设备离线');
             S.currentRori = null;
@@ -169,7 +173,20 @@
      * 由统一 tick 每 5s 调用一次，阈值取自 core.js 的 heartbeatMissLimit（6 次 = 30s），
      * 与后端 heartbeat.DEVICE_OFFLINE_SECONDS = 30 对齐，前后端离线判定一致。
      */
+    /** 最近一次服务端快照是否还新鲜（秒） */
+    function snapshotFresh(seconds) {
+        return !!S.lastSnapshotAt && (Date.now() - S.lastSnapshotAt) < (seconds || 25) * 1000;
+    }
+
     function watchHeartbeat() {
+        // 刷新后没有 MQTT 事件流，靠服务端快照维持在线态；快照过期就再拉一次，
+        // 这样「设备有数据、只是没连 MQTT」时不会误报离线。
+        if (snapshotFresh()) {
+            S.heartbeatMiss = 0;
+            S.deviceOnline = true;
+            refreshStatus();
+            return;
+        }
         if (S.dataReceived) {
             S.heartbeatMiss = 0;
             S.deviceOnline = true;
@@ -177,6 +194,7 @@
         } else {
             S.heartbeatMiss += 1;
             if (S.heartbeatMiss >= S.heartbeatMissLimit) S.deviceOnline = false;
+            if (!S.deviceOnline) loadLatest();
         }
         refreshStatus();
     }
@@ -255,10 +273,13 @@
                     S.cloudConnected = true;
                 } else {
                     S.cloudConnected = false;
-                    S.deviceOnline = false;
+                    // 服务端心跳判定与前端快照可能有时差：快照还新鲜就只标记 broker 断开，
+                    // 不把「有数据」误判成设备离线。
+                    if (!snapshotFresh()) S.deviceOnline = false;
                     root.addLog('设备断开连接', 'log-danger');
                 }
-                QH.enqueueFlag('refreshStatus', true);
+                refreshStatus();
+                updateRori();
                 return;
             }
 
@@ -366,6 +387,61 @@
         }
     }
 
+    /**
+     * 用服务端最新遥测快照恢复看板读数。
+     *
+     * 刷新页面 / 手机切回前台时，SocketIO 不会重放历史事件，若不补这一帧，
+     * 四路读数会停在「--」，而下方图表与七日建议却已有数据，看起来像设备掉线。
+     */
+    function applySnapshot(data) {
+        if (!data || data.status !== 'success' || !data.has_telemetry) return false;
+        var applied = false;
+        if (typeof data.water_adc === 'number') {
+            S.waterAdc = data.water_adc;
+            S.currentWaterLevel = Math.max(0, Math.min(Math.round(data.water_mm), 300));
+            QH.enqueueField('waterDisplay', String(S.currentWaterLevel));
+            applied = true;
+        }
+        if (typeof data.soil_adc === 'number') {
+            S.soilAdc = data.soil_adc;
+            S.currentSoilMoisture = Math.max(0, Math.min(Math.round(data.soil_pct), 100));
+            QH.enqueueField('soilDisplay', String(S.currentSoilMoisture));
+            applied = true;
+        }
+        if (typeof data.do_mgl === 'number') {
+            S.doValue = Math.max(0, Math.min(data.do_mgl, 20));
+            QH.enqueueField('doDisplay', S.doValue.toFixed(1));
+            applied = true;
+        }
+        if (typeof data.eh_mv === 'number') {
+            S.ehValue = Math.max(-150, Math.min(data.eh_mv, 300));
+            QH.enqueueField('ehDisplay', String(Math.round(S.ehValue)));
+            applied = true;
+        }
+        if (data.air_pump) QH.enqueuePump('deviceStatus', data.air_pump);
+        if (data.water_pump) QH.enqueuePump('waterPumpStatus', data.water_pump);
+        if (applied) {
+            // 记录快照时间：服务端有新鲜数据即视为设备在线（MQTT 链路状态单独看顶部胶囊）
+            S.lastSnapshotAt = Date.now();
+            S.dataReceived = true;
+            S.deviceOnline = true;
+            S.heartbeatMiss = 0;
+            // 先刷连接状态再算 RORI：refreshStatus 会把离线文案写回状态位，
+            // 顺序反了会把刚算出的等级名覆盖掉。
+            refreshStatus();
+            updateRori();
+        }
+        return applied;
+    }
+
+    /** 拉一次服务端快照并套用；失败静默（等 MQTT 首帧即可） */
+    function loadLatest() {
+        return fetch('/api/telemetry').then(function (r) {
+            if (!r.ok) throw new Error('http ' + r.status);
+            return r.json();
+        }).then(applySnapshot).catch(function () { return false; });
+    }
+
     root.QH_REALTIME = {
         refreshStatus: refreshStatus,
         updateRori: updateRori,
@@ -375,7 +451,9 @@
         recordAlert: recordAlert,
         initSocket: initSocket,
         sendAutoCommand: sendAutoCommand,
-        sendManualCommand: sendManualCommand
+        sendManualCommand: sendManualCommand,
+        applySnapshot: applySnapshot,
+        loadLatest: loadLatest
     };
 
     root.refreshStatus = refreshStatus;
