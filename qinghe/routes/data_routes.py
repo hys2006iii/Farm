@@ -23,14 +23,25 @@ def _parse_limit(raw, default=None):
 
 @bp.route('/api/history', methods=['GET'])
 def api_history():
-    """取当前用户最近的传感器历史（按时间升序返回）。"""
+    """取当前用户最近的传感器历史（按时间升序返回）。
+
+    每行含 `ts` / `water_adc` / `soil_adc` / `do_mgl` / `eh_mv`；后两项是
+    D-01 迁移新增的列，早期数据为 `None`（JSON `null`），前端据此回退。
+    排序与 limit 语义保持不变。
+    """
     if 'user_id' not in session:
         return jsonify({'error': '未授权'}), 401
     uid = session['user_id']
     limit = _parse_limit(request.args.get('limit'))
     rows = db.query_history(uid, limit)
     result = [
-        {'ts': r['ts'], 'water_adc': r['water_adc'], 'soil_adc': r['soil_adc']}
+        {
+            'ts': r['ts'],
+            'water_adc': r['water_adc'],
+            'soil_adc': r['soil_adc'],
+            'do_mgl': r['do_mgl'],
+            'eh_mv': r['eh_mv'],
+        }
         for r in rows
     ]
     result.reverse()
