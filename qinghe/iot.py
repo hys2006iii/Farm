@@ -99,9 +99,12 @@ class HistoryWriter:
         self._lock = threading.Lock()
         self.dropped = 0
 
-    def enqueue(self, uid, ts, water_adc, soil_adc) -> bool:
-        """入队一条历史采样；队列满则丢弃最旧一条再放入。返回是否直接入队成功。"""
-        item = (uid, ts, water_adc, soil_adc)
+    def enqueue(self, uid, ts, water_adc, soil_adc, do_mgl=None, eh_mv=None) -> bool:
+        """入队一条历史采样；队列满则丢弃最旧一条再放入。返回是否直接入队成功。
+
+        `do_mgl` / `eh_mv` 为可选感知量，缺失时存 `NULL`（兼容旧调用方）。
+        """
+        item = (uid, ts, water_adc, soil_adc, do_mgl, eh_mv)
         try:
             self.queue.put_nowait(item)
             return True
@@ -228,14 +231,24 @@ def parse_mqtt_payload(topic: str, content: str):
 
 
 def extract_history_sample(values: dict, now_ms: int = None):
-    """从解析出的属性中提取历史采样行；水位与土壤不齐时返回 None。"""
+    """从解析出的属性中提取历史采样行；水位与土壤不齐时返回 None。
+
+    返回 `(water_adc, soil_adc, ts, do_mgl, eh_mv)`：溶解氧与氧化还原电位为
+    可选感知量，缺失时为 `None`（便于碳汇 / 厌氧评价回溯）。
+    """
     water_adc = values.get('waterlevel')
     soil_adc = values.get('humidity')
     if water_adc is None or soil_adc is None:
         return None
     try:
         ts = int(time.time() * 1000) if now_ms is None else int(now_ms)
-        return (int(float(water_adc)), int(float(soil_adc)), ts)
+        return (
+            int(float(water_adc)),
+            int(float(soil_adc)),
+            ts,
+            _to_float(values.get('do')),
+            _to_float(values.get('eh')),
+        )
     except (TypeError, ValueError):
         return None
 
@@ -331,11 +344,16 @@ def _feed_insight(uid, values: dict, now_ms: int) -> None:
         if now_s - last < _ALERT_EVAL_INTERVAL:
             return
         _alert_eval_last[uid] = now_s
+
     try:
         from qinghe import db
         row = db.load_thresholds(uid)
         # load_thresholds 返回 sqlite3.Row 或 None；统一转成 dict 再取默认值
         thresh = dict(row) if row else {}
+    except Exception:  # noqa: BLE001
+        thresh = {}
+
+    try:
         alert_center.evaluate_and_push(
             uid,
             soil_pct,
@@ -346,6 +364,18 @@ def _feed_insight(uid, values: dict, now_ms: int) -> None:
             thresh.get('waterlevel_down', 30),
             thresh.get('waterlevel_up', 150),
         )
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 低水位告警：既有 alerts.evaluate_alerts() 不产出 water_low，这里补一条
+    try:
+        raw_low = thresh.get('waterlevel_down')
+        low_mm = 30.0 if raw_low is None else float(raw_low)
+        if water_mm < low_mm:
+            alert_center.push_alert(
+                uid, 'warning', 'water_low',
+                '渠道水位偏低（%.1f mm，低于下限 %.0f mm）' % (water_mm, low_mm),
+            )
     except Exception:  # noqa: BLE001
         pass
 
@@ -366,8 +396,8 @@ def handle_mqtt_message(uid, topic, content, emit=None, writer=None) -> None:
 
     sample = extract_history_sample(values)
     if sample is not None:
-        water_adc, soil_adc, ts = sample
-        writer.enqueue(uid, ts, water_adc, soil_adc)
+        water_adc, soil_adc, ts, do_mgl, eh_mv = sample
+        writer.enqueue(uid, ts, water_adc, soil_adc, do_mgl, eh_mv)
     else:
         ts = int(time.time() * 1000)
 

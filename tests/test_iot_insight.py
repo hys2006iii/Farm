@@ -19,8 +19,8 @@ class FakeWriter:
     def __init__(self):
         self.rows = []
 
-    def enqueue(self, uid, ts, water_adc, soil_adc):
-        self.rows.append((uid, ts, water_adc, soil_adc))
+    def enqueue(self, uid, ts, water_adc, soil_adc, do_mgl=None, eh_mv=None):
+        self.rows.append((uid, ts, water_adc, soil_adc, do_mgl, eh_mv))
         return True
 
 
@@ -143,13 +143,34 @@ def test_message_alert_evaluation_is_throttled(uid):
 
 
 def test_message_still_emits_and_enqueues_history(uid):
-    """旁路集成不影响原有推送与历史入库行为。"""
-    emitted, writer = send(uid, huawei_payload(waterlevel=1500, humidity=3500))
+    """旁路集成不影响原有推送与历史入库行为，且 DO / Eh 一并落库。"""
+    emitted, writer = send(uid, huawei_payload(waterlevel=1500, humidity=3500,
+                                               do=4.5, eh=90))
     topics = {msg['topic'] for _, msg in emitted}
     assert {'waterlevel', 'humidity'} <= topics
     assert len(writer.rows) == 1
-    water_adc, soil_adc = writer.rows[0][2], writer.rows[0][3]
+    _, _, water_adc, soil_adc, do_mgl, eh_mv = writer.rows[0]
     assert (water_adc, soil_adc) == (1500, 3500)
+    assert do_mgl == pytest.approx(4.5)
+    assert eh_mv == pytest.approx(90.0)
+
+
+def test_history_rows_persist_do_and_eh(uid):
+    """DO / Eh 能真正写进 sensor_history 并被查询接口读回。"""
+    from contextlib import closing
+
+    from qinghe import db
+
+    db.insert_history_rows([(uid, 1750000100000, 200, 2100, 3.5, -120)])
+    with closing(db.get_db()) as conn:
+        row = conn.execute(
+            'SELECT ts, water_adc, soil_adc, do_mgl, eh_mv FROM sensor_history'
+            ' WHERE user_id = ?', (uid,)).fetchone()
+    assert row['do_mgl'] == pytest.approx(3.5)
+    assert row['eh_mv'] == pytest.approx(-120.0)
+
+    rows = db.query_history(uid, 10)
+    assert rows and rows[0]['do_mgl'] == pytest.approx(3.5)
 
 
 @pytest.mark.parametrize('payload', ['not-json', '12345', '{"foo": "bar"}'])
@@ -163,6 +184,14 @@ def test_message_without_sensors_skips_alert_eval(uid):
     """只有泵状态、没有传感器数据的报文不触发告警判定。"""
     send(uid, huawei_payload(air_pump='on'))
     assert alert_center.list_alerts(uid, limit=10) == []
+
+
+def test_message_triggers_low_water_alert(uid):
+    """水位低于下限时补发 water_low 告警（既有 evaluate_alerts 不产出该码）。"""
+    # humidity=1500 -> 湿润度约 63%，不触发土壤告警；waterlevel=200 -> 约 14.65mm
+    send(uid, huawei_payload(waterlevel=200, humidity=1500, do=6.5, eh=200))
+    codes = {item['code'] for item in alert_center.list_alerts(uid, limit=50)}
+    assert 'water_low' in codes
 
 
 def test_thresholds_from_db_drive_alert_judgement(uid):

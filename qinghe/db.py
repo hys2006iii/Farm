@@ -77,8 +77,16 @@ def init_db(force: bool = False) -> None:
                 user_id INTEGER NOT NULL,
                 ts INTEGER NOT NULL,
                 water_adc INTEGER,
-                soil_adc INTEGER
+                soil_adc INTEGER,
+                do_mgl REAL,
+                eh_mv REAL
             )''')
+            # 老库没有 do_mgl / eh_mv，按需补列（幂等）
+            cursor.execute('PRAGMA table_info(sensor_history)')
+            history_cols = [r[1] for r in cursor.fetchall()]
+            for col, ddl in _HISTORY_MIGRATIONS:
+                if col not in history_cols:
+                    cursor.execute(ddl)
             cursor.execute(
                 'CREATE INDEX IF NOT EXISTS idx_history_user_ts ON sensor_history(user_id, ts)'
             )
@@ -110,6 +118,12 @@ _CONFIG_MIGRATIONS = [
      "ALTER TABLE configs ADD COLUMN iot_cmd_topic TEXT DEFAULT '/esp32e/cmd'"),
     ('farm_name', "ALTER TABLE configs ADD COLUMN farm_name TEXT DEFAULT ''"),
     ('webhook_url', "ALTER TABLE configs ADD COLUMN webhook_url TEXT DEFAULT ''"),
+]
+
+#: sensor_history 表的增量迁移列（列名, DDL）：溶解氧与氧化还原电位
+_HISTORY_MIGRATIONS = [
+    ('do_mgl', 'ALTER TABLE sensor_history ADD COLUMN do_mgl REAL'),
+    ('eh_mv', 'ALTER TABLE sensor_history ADD COLUMN eh_mv REAL'),
 ]
 
 
@@ -231,16 +245,25 @@ def insert_history_rows(rows) -> None:
     """批量写入历史采样。
 
     参数:
-        rows: 可迭代的 (user_id, ts, water_adc, soil_adc) 元组序列。
+        rows: 可迭代的 `(user_id, ts, water_adc, soil_adc[, do_mgl, eh_mv])` 元组序列。
+              4 / 5 元组会按位补齐 `None`，兼容旧调用方。
     """
-    rows = list(rows)
-    if not rows:
+    normalized = []
+    for row in rows:
+        item = tuple(row)
+        if len(item) == 4:
+            item = item + (None, None)
+        elif len(item) == 5:
+            item = item + (None,)
+        normalized.append(item[:6])
+    if not normalized:
         return
     with closing(get_db()) as conn:
         conn.executemany(
-            'INSERT INTO sensor_history (user_id, ts, water_adc, soil_adc)'
-            ' VALUES (?, ?, ?, ?)',
-            rows,
+            'INSERT INTO sensor_history'
+            ' (user_id, ts, water_adc, soil_adc, do_mgl, eh_mv)'
+            ' VALUES (?, ?, ?, ?, ?, ?)',
+            normalized,
         )
         conn.commit()
 
@@ -249,7 +272,7 @@ def query_history(uid: int, limit: int):
     """按时间倒序取最近 limit 条历史，返回 sqlite3.Row 列表（未 reverse）。"""
     with closing(get_db()) as conn:
         cur = conn.execute(
-            'SELECT ts, water_adc, soil_adc FROM sensor_history'
+            'SELECT ts, water_adc, soil_adc, do_mgl, eh_mv FROM sensor_history'
             ' WHERE user_id = ? ORDER BY ts DESC LIMIT ?',
             (uid, limit),
         )

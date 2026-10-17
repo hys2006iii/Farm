@@ -80,7 +80,15 @@ def test_extract_history_sample_requires_both_fields():
 def test_extract_history_sample_converts_to_int():
     sample = iot.extract_history_sample(
         {'waterlevel': '1024.7', 'humidity': 2048.2}, now_ms=1700000000000)
-    assert sample == (1024, 2048, 1700000000000)
+    assert sample == (1024, 2048, 1700000000000, None, None)
+
+
+def test_extract_history_sample_includes_optional_do_and_eh():
+    """溶解氧与氧化还原电位随采样一起返回（供碳汇 / 厌氧评价回溯）。"""
+    sample = iot.extract_history_sample(
+        {'waterlevel': 800, 'humidity': 1600, 'do': '3.5', 'eh': -120},
+        now_ms=1700000000000)
+    assert sample == (800, 1600, 1700000000000, 3.5, -120.0)
 
 
 def test_extract_history_sample_handles_garbage():
