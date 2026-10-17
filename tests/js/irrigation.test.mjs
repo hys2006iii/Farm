@@ -33,6 +33,15 @@ const CORE = require(path.resolve(__dirname, '../../static/js/core.js'));
 const { computeRori, classifyRori, computeDynamicThreshold, RORI, RAIN, LEVEL } = IRR;
 // core.js 是浏览器 IIFE，不导出 module.exports；esc 挂在 globalThis 上
 const esc = CORE.esc || globalThis.esc;
+const S = CORE.S || globalThis.S;
+
+test('心跳离线阈值：前端 30s 与后端 heartbeat.DEVICE_OFFLINE_SECONDS 对齐', () => {
+    // 后端 qinghe/heartbeat.py: DEVICE_OFFLINE_SECONDS = 30（契约默认 30 秒）
+    const BACKEND_OFFLINE_SECONDS = 30;
+    const HEARTBEAT_SWEEP_MS = 5000;   // app.js 注册 heartbeat 任务的周期
+    assert.equal(S.heartbeatMissLimit * HEARTBEAT_SWEEP_MS / 1000, BACKEND_OFFLINE_SECONDS,
+        '前端判离线耗时必须等于后端 30s，否则同一设备两端状态会打架');
+});
 
 /** 浮点近似断言 */
 function near(actual, expected, eps = 1e-9, msg) {
@@ -46,17 +55,17 @@ test('computeRori: 全部取最小风险（ADC=0, Eh 上限, DO 上限）-> 0', 
     // 水位 ADC=0 -> 0mm；土壤 ADC=0 -> 100% 湿润 -> riskSoil=1
     // Eh=300 -> sEh=0；DO=8 -> sDo=0；水位风险 0
     // pRisk = 0.30*max(0,1) + 0.5*0*1 = 0.30 -> 30
-    near(computeRori(0, 0, RORI.EH_MAX, RORI.DO_MAX), 30, 1e-9, 'ADC=0');
+    near(computeRori(0, 0, RORI.DO_MAX, RORI.EH_MAX), 30, 1e-9, 'ADC=0');
 });
 
 test('computeRori: ADC=4095 全量程（水位满、土壤最干、Eh/DO 最低）-> 100', () => {
     // 水位 300mm -> riskWater=1；土壤 0% -> riskSoil=0；sEh=1；sDo=1
     // pRisk = 0.35 + 0.35 + 0.30*1 + 0.5*1*0 = 1.0 -> 100
-    near(computeRori(4095, 4095, RORI.EH_MIN, RORI.DO_MIN), 100, 1e-9, 'ADC=4095');
+    near(computeRori(4095, 4095, RORI.DO_MIN, RORI.EH_MIN), 100, 1e-9, 'ADC=4095');
 });
 
 test('computeRori: 中间值（ADC=2048 双通道）落在 0~100 之间且可复算', () => {
-    const v = computeRori(2048, 2048, 100, 4);
+    const v = computeRori(2048, 2048, 4, 100);
     // 手工复算：water=2048/4095*300=150.03mm -> riskWater=(150.03-5)/100 夹逼到 1
     //          soil=(4095-2048)/4095*100=49.99% -> riskSoil=0.4999...
     //          sEh=(300-100)/450=0.4444...；sDo=(8-4)/8=0.5
@@ -83,33 +92,48 @@ test('computeRori: NaN / undefined / 非数字入参不产生 NaN，回退为有
 });
 
 test('computeRori: 超量程入参被夹逼，结果仍在 [0,100]', () => {
-    assert.ok(computeRori(99999, -5000, 9999, -9999) <= 100);
-    assert.ok(computeRori(-1, 99999, -9999, 9999) >= 0);
+    assert.ok(computeRori(99999, -5000, -9999, 9999) <= 100);
+    assert.ok(computeRori(-1, 99999, 9999, -9999) >= 0);
 });
 
 test('computeRori: 水位死区 5mm 以内不计水位风险', () => {
     // water ADC=68 -> 68/4095*300 = 4.98mm < 5mm 死区
-    const deadZone = computeRori(68, 4095, RORI.EH_MAX, RORI.DO_MAX);
+    const deadZone = computeRori(68, 4095, RORI.DO_MAX, RORI.EH_MAX);
     near(deadZone, 0, 1e-9, '死区内水位无风险');
 });
 
 test('computeRori: DO 边界 0 / 8.0 / 超上限，风险因子夹逼到 [0,1]', () => {
     // DO=0 -> 风险因子 1（最缺氧）；DO=8 -> 0；DO>8 -> 夹逼后仍为 0
-    const doZero = computeRori(0, 4095, RORI.EH_MAX, 0);
-    const doFull = computeRori(0, 4095, RORI.EH_MAX, RORI.DO_MAX);
-    const doOver = computeRori(0, 4095, RORI.EH_MAX, 999);
+    const doZero = computeRori(0, 4095, 0, RORI.EH_MAX);
+    const doFull = computeRori(0, 4095, RORI.DO_MAX, RORI.EH_MAX);
+    const doOver = computeRori(0, 4095, 999, RORI.EH_MAX);
     near(doZero, RORI.W_DO * 100, 1e-9, 'DO=0');
     near(doFull, 0, 1e-9, 'DO=8.0');
     near(doOver, doFull, 1e-9, 'DO>8 与 DO=8 等价');
 });
 
 test('computeRori: Eh 边界 -150 / 300，风险因子夹逼到 [0,1]', () => {
-    const ehMin = computeRori(0, 4095, RORI.EH_MIN, RORI.DO_MAX);
-    const ehMax = computeRori(0, 4095, RORI.EH_MAX, RORI.DO_MAX);
-    const ehUnder = computeRori(0, 4095, -9999, RORI.DO_MAX);
+    const ehMin = computeRori(0, 4095, RORI.DO_MAX, RORI.EH_MIN);
+    const ehMax = computeRori(0, 4095, RORI.DO_MAX, RORI.EH_MAX);
+    const ehUnder = computeRori(0, 4095, RORI.DO_MAX, -9999);
     near(ehMin, RORI.W_EH * 100, 1e-9, 'Eh=-150 满风险');
     near(ehMax, 0, 1e-9, 'Eh=300 零风险');
     near(ehUnder, ehMin, 1e-9, 'Eh 低于下限与下限等价');
+});
+
+test('computeRori: 参数顺序与后端一致（water, soil, do, eh）——写反会算出不同结果', () => {
+    // 该用例锁定前后端签名对齐：后端 qinghe/irrigation.py:74
+    //   compute_rori(water_adc, soil_adc, do_mgl, eh_mv)
+    // 前端 static/js/irrigation.js: computeRori(waterAdc, soilAdc, doVal, ehMv)
+    // 参考值由后端实测得出：compute_rori(1500, 2200, 6.0, 120) = 75.88797313797313
+    const BACKEND_REFERENCE = 75.88797313797313;
+    near(computeRori(1500, 2200, 6.0, 120), BACKEND_REFERENCE, 1e-9, '对齐后端参考值');
+    assert.equal(classifyRori(computeRori(1500, 2200, 6.0, 120)).code, 2, '应判为重度厌氧');
+
+    // 反向守卫：若把 DO 与 Eh 写反，结果必然不同（本例 76.0046398046398）
+    const swapped = computeRori(1500, 2200, 120, 6.0);
+    assert.notEqual(swapped, BACKEND_REFERENCE, '参数写反必须被本用例发现');
+    assert.ok(Math.abs(swapped - BACKEND_REFERENCE) > 1e-6, '写反后偏差应显著');
 });
 
 /* ======================= classifyRori ======================= */

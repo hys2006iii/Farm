@@ -69,7 +69,8 @@
             S.currentRori = null;
             return;
         }
-        var roriValue = root.computeRori(S.waterAdc, S.soilAdc, S.ehValue, S.doValue);
+        // 参数顺序与后端 compute_rori 一致：(水位, 土壤, 溶解氧, 氧化还原电位)
+        var roriValue = root.computeRori(S.waterAdc, S.soilAdc, S.doValue, S.ehValue);
         var level = root.classifyRori(roriValue);
         S.currentRori = roriValue;
 
@@ -165,7 +166,8 @@
     /* ---------------- 心跳 ---------------- */
     /**
      * 在线检测增加冗余：连续丢心跳达 S.heartbeatMissLimit 次才判离线，单次/偶发丢包不误判。
-     * 由统一 tick 每 5s 调用一次（阈值取自 core.js 的 heartbeatMissLimit，默认 4 次）。
+     * 由统一 tick 每 5s 调用一次，阈值取自 core.js 的 heartbeatMissLimit（6 次 = 30s），
+     * 与后端 heartbeat.DEVICE_OFFLINE_SECONDS = 30 对齐，前后端离线判定一致。
      */
     function watchHeartbeat() {
         if (S.dataReceived) {

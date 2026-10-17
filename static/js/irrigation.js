@@ -59,16 +59,21 @@
 
     /**
      * RORI 多维融合计算（说明书 3.1~3.2）。
+     *
+     * 参数顺序与后端 `qinghe/irrigation.py: compute_rori(water_adc, soil_adc, do_mgl, eh_mv)`
+     * 严格一致——第 3、4 位是「溶解氧、氧化还原电位」，不要写反，
+     * 否则会把 Eh 当 DO 代入，不报错但结果错。
+     *
      * @param {number} waterAdc 水位 ADC 原始值（0~4095，越大水越深）
      * @param {number} soilAdc  土壤湿度 ADC 原始值（0~4095，越大越干）
-     * @param {number} [eh]     根区氧化还原电位 mV（-150~300）
      * @param {number} [doVal]  根区溶解氧 mg/L（0~8）
+     * @param {number} [ehMv]   根区氧化还原电位 mV（-150~300）
      * @returns {number} RORI 指数 0~100
      */
-    function computeRori(waterAdc, soilAdc, eh, doVal) {
+    function computeRori(waterAdc, soilAdc, doVal, ehMv) {
         var wAdc = clamp(num(waterAdc, 0), 0, RORI.ADC_FULL);
         var sAdc = clamp(num(soilAdc, 0), 0, RORI.ADC_FULL);
-        var ehV = clamp(num(eh, 0), RORI.EH_MIN, RORI.EH_MAX);
+        var ehV = clamp(num(ehMv, 0), RORI.EH_MIN, RORI.EH_MAX);
         var doV = clamp(num(doVal, 0), RORI.DO_MIN, RORI.DO_MAX);
 
         // 原始 ADC -> 物理量
