@@ -1,0 +1,225 @@
+/* ============================================================
+   insight.css — 「智能洞察」面板（告警中心 / 运行日志 / 设备状态 /
+   AI 决策预案 / 节水减碳），复用 base.css 的设计令牌与 modal 视觉语言
+   ============================================================ */
+
+/* ===== 面板容器（比常规 modal 更宽，容纳表格与卡片） ===== */
+.insight-box {
+    background: #fff; border-radius: 16px; width: 860px; max-width: calc(100vw - 32px);
+    height: 82vh; display: flex; flex-direction: column; padding: 0;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.25); overflow: hidden;
+}
+
+/* ===== 头部 ===== */
+.insight-hd {
+    display: flex; align-items: center; gap: 12px;
+    padding: 18px 24px 14px; border-bottom: 1px solid #EDF1EC; flex-shrink: 0;
+}
+.insight-hd h2 { color: var(--primary-dark); font-size: 16px; margin: 0; }
+.insight-hd .insight-sub { font-size: 12px; color: var(--text-sub); margin-right: auto; }
+.insight-close {
+    background: #EDF1EC; border: none; width: 28px; height: 28px; border-radius: 50%;
+    font-weight: 700; cursor: pointer; color: #55665C; flex-shrink: 0;
+}
+.insight-close:hover { background: #DFE6E1; }
+
+/* ===== Tab 条 ===== */
+.insight-tabs {
+    display: flex; gap: 4px; padding: 10px 24px 0; flex-shrink: 0;
+    border-bottom: 1px solid #EDF1EC; background: #FAFCFA; overflow-x: auto;
+}
+.insight-tab {
+    background: transparent; border: none; border-bottom: 2px solid transparent;
+    padding: 9px 14px; font-size: 13px; font-weight: 600; color: var(--text-sub);
+    cursor: pointer; white-space: nowrap; transition: 0.15s;
+}
+.insight-tab:hover { color: var(--primary); }
+.insight-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+
+/* ===== 内容区 ===== */
+.insight-body { flex: 1; overflow-y: auto; padding: 18px 24px 24px; }
+.insight-pane { display: none; }
+.insight-pane.active { display: block; }
+
+/* ===== 通用：空态 / 加载 / 错误 ===== */
+.insight-empty {
+    text-align: center; color: var(--text-sub); font-size: 13px;
+    padding: 40px 16px; background: #F8FAF8; border-radius: 10px; border: 1px dashed #DDE4DF;
+}
+.insight-empty.error { color: #B84A4A; border-color: #EBC7C7; background: #FDF7F7; }
+.insight-loading { text-align: center; color: var(--text-sub); font-size: 13px; padding: 34px 16px; }
+
+/* ===== 工具条（标题 + 操作按钮） ===== */
+.insight-toolbar {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.insight-toolbar h3 { font-size: 14px; color: var(--primary-dark); margin: 0; margin-right: auto; }
+.insight-btn {
+    background: var(--primary); color: #F0F7F1; border: none; border-radius: 8px;
+    padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.15s;
+}
+.insight-btn:hover { background: #2A7D50; }
+.insight-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.insight-btn.ghost { background: #E8EDE9; color: #55665C; }
+.insight-btn.ghost:hover { background: #DDE4DF; }
+.insight-btn.danger { background: #C85A5A; }
+.insight-btn.danger:hover { background: #B84A4A; }
+.insight-btn.sm { padding: 5px 12px; font-size: 12px; }
+
+/* ===== 通用列表行 ===== */
+.insight-list { display: flex; flex-direction: column; gap: 8px; }
+.insight-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 11px 14px; background: #F8FAF8; border: 1px solid #E9EEE9;
+    border-radius: 10px; font-size: 13px; line-height: 1.5;
+}
+.insight-row.is-acked { opacity: 0.55; }
+.insight-row .row-time {
+    color: var(--text-sub); font-size: 12px; font-variant-numeric: tabular-nums;
+    flex-shrink: 0; padding-top: 1px;
+}
+.insight-row .row-main { flex: 1; min-width: 0; word-break: break-word; }
+.insight-row .row-meta { color: var(--text-sub); font-size: 12px; margin-top: 3px; }
+
+/* ===== 级别色点（danger=红 / warning=橙 / info=蓝） ===== */
+.lv-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    flex-shrink: 0; margin-top: 6px;
+}
+.lv-danger { background: var(--danger); box-shadow: 0 0 6px rgba(229,83,75,0.6); }
+.lv-warning { background: var(--warn); box-shadow: 0 0 6px rgba(232,163,61,0.6); }
+.lv-info { background: #3D7FB8; box-shadow: 0 0 6px rgba(61,127,184,0.6); }
+
+/* ===== 来源徽标 ===== */
+.src-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 6px;
+    font-size: 11px; font-weight: 700; flex-shrink: 0;
+    background: #E8EDE9; color: #55665C;
+}
+.src-system { background: #E8EDE9; color: #55665C; }
+.src-device { background: #E4EEF5; color: #2E6C93; }
+.src-auto { background: #E7F3EB; color: var(--primary); }
+.src-manual { background: #FBF0DC; color: #A9761F; }
+.src-plan { background: #EDE8F5; color: #6A4FA3; }
+.src-config { background: #F5E8EC; color: #A34F6A; }
+
+/* 日志级别标记 */
+.log-level { font-size: 11px; font-weight: 700; flex-shrink: 0; padding: 2px 6px; border-radius: 6px; }
+.log-info { color: var(--text-sub); background: #EEF2EF; }
+.log-warning { color: #A9761F; background: #FBF0DC; }
+.log-error { color: #B84A4A; background: #F9E7E7; }
+
+/* ===== 设备状态 ===== */
+.device-hero { text-align: center; padding: 26px 16px 20px; }
+.device-hero .device-state { font-size: 40px; font-weight: 800; letter-spacing: 2px; line-height: 1.2; }
+.device-hero .device-state.online { color: var(--primary); }
+.device-hero .device-state.offline { color: var(--danger); }
+.device-hero .device-hint { font-size: 13px; color: var(--text-sub); margin-top: 8px; }
+.device-offline-warn {
+    margin: 14px auto 0; max-width: 460px; padding: 12px 16px;
+    background: #FDF2F2; border: 1px solid #F0C9C9; border-radius: 10px;
+    color: #B84A4A; font-size: 13px; font-weight: 600; text-align: center;
+}
+.device-meta {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+    margin-top: 22px; max-width: 560px; margin-left: auto; margin-right: auto;
+}
+.device-meta .meta-cell {
+    background: #F8FAF8; border: 1px solid #E9EEE9; border-radius: 10px;
+    padding: 12px; text-align: center;
+}
+.device-meta .meta-label { font-size: 11px; color: var(--text-sub); margin-bottom: 5px; }
+.device-meta .meta-value { font-size: 15px; font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+
+/* ===== AI 决策预案 ===== */
+.plan-card {
+    background: #F8FAF8; border: 1px solid #E9EEE9; border-radius: 12px;
+    padding: 16px; margin-bottom: 14px;
+}
+.plan-card .plan-head {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap;
+}
+.plan-card .plan-head h4 { font-size: 14px; color: var(--primary-dark); margin: 0; margin-right: auto; }
+.plan-badge {
+    font-size: 11px; font-weight: 700; padding: 2px 9px; border-radius: 20px;
+    background: #E8EDE9; color: #55665C;
+}
+.plan-badge.st-pending { background: #FBF0DC; color: #A9761F; }
+.plan-badge.st-confirmed { background: #E7F3EB; color: var(--primary); }
+.plan-badge.st-rejected { background: #F9E7E7; color: #B84A4A; }
+.plan-badge.st-expired { background: #EEF2EF; color: #6B7A72; }
+.plan-badge.st-failed { background: #F9E7E7; color: #B84A4A; }
+.plan-badge.ai-used { background: #EDE8F5; color: #6A4FA3; }
+
+.plan-summary { font-size: 13px; line-height: 1.65; color: var(--text); margin: 8px 0; }
+.plan-risk {
+    font-size: 12px; color: #A9761F; background: #FBF0DC; border-radius: 8px;
+    padding: 9px 12px; margin-top: 10px; line-height: 1.6;
+}
+.plan-risk.safe { color: var(--primary); background: #E7F3EB; }
+
+/* 可折叠推理依据 */
+.plan-reason > summary {
+    cursor: pointer; font-size: 12px; font-weight: 700; color: var(--primary);
+    padding: 7px 0; user-select: none;
+}
+.plan-reason > summary:hover { text-decoration: underline; }
+.plan-reason .reason-body {
+    font-size: 12.5px; line-height: 1.7; color: #3F4F46; background: #fff;
+    border: 1px solid #E9EEE9; border-radius: 8px; padding: 12px;
+    white-space: pre-wrap; word-break: break-word; margin-bottom: 6px;
+}
+
+/* 动作表格 */
+.insight-table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px; }
+.insight-table th {
+    text-align: left; font-size: 11px; color: var(--text-sub); font-weight: 700;
+    padding: 7px 10px; background: #EEF2EF; border-bottom: 1px solid #E3E9E4;
+}
+.insight-table th:first-child { border-top-left-radius: 8px; }
+.insight-table th:last-child { border-top-right-radius: 8px; }
+.insight-table td {
+    padding: 8px 10px; border-bottom: 1px solid #EEF2EF;
+    color: var(--text); vertical-align: top; word-break: break-word;
+}
+.insight-table tr:last-child td { border-bottom: none; }
+.insight-table td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+.plan-actions { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+
+/* ===== 节水减碳看板 ===== */
+.metric-cards {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px;
+}
+.metric-card {
+    background: #F8FAF8; border: 1px solid #E9EEE9; border-radius: 12px;
+    padding: 16px 14px; text-align: center;
+}
+.metric-card .metric-label { font-size: 11px; color: var(--text-sub); margin-bottom: 8px; }
+.metric-card .metric-value {
+    font-size: 24px; font-weight: 800; color: var(--primary);
+    font-variant-numeric: tabular-nums; line-height: 1.1;
+}
+.metric-card .metric-unit { font-size: 11px; color: var(--text-sub); margin-top: 5px; }
+
+.metric-method {
+    font-size: 12px; line-height: 1.65; color: #55665C; background: #F4F7F4;
+    border-left: 3px solid var(--primary); border-radius: 0 8px 8px 0;
+    padding: 11px 14px; margin-top: 16px;
+}
+.metric-method b { color: var(--primary-dark); }
+
+.insight-export { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.insight-export a {
+    display: inline-block; text-decoration: none; background: #E8EDE9; color: #55665C;
+    border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 600; transition: 0.15s;
+}
+.insight-export a:hover { background: #DDE4DF; color: var(--primary); }
+
+/* ===== 响应式 ===== */
+@media (max-width: 900px) {
+    .insight-box { width: calc(100vw - 24px); height: 88vh; }
+    .metric-cards { grid-template-columns: repeat(2, 1fr); }
+    .device-meta { grid-template-columns: 1fr; }
+    .insight-hd, .insight-tabs, .insight-body { padding-left: 16px; padding-right: 16px; }
+}

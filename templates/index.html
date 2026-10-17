@@ -9,10 +9,11 @@
             defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
             defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <!-- 样式：按职责拆分，顺序 base -> dashboard -> modal -->
+    <!-- 样式：按职责拆分，顺序 base -> dashboard -> modal -> insight -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/modal.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/insight.css') }}">
 </head>
 <body data-username="{{ username }}">
 
@@ -26,6 +27,7 @@
             <div class="date" id="sysDate">--</div>
             <div class="time" id="sysTime">--:--:--</div>
         </div>
+        <button class="topbar-btn" onclick="openInsight()">智能洞察</button>
         <button class="topbar-btn" onclick="openModal('chatModal')">AI 助手</button>
         <button class="topbar-btn topbar-btn-outline" onclick="openModal('configModal')">系统设置</button>
         <div class="status-col">
@@ -325,6 +327,73 @@
     </div>
 </div>
 
+<!-- ===== 智能洞察面板：告警中心 / 运行日志 / 设备状态 / AI 决策预案 / 节水减碳 ===== -->
+<div id="insightModal" class="modal-overlay hidden">
+    <div class="insight-box">
+        <div class="insight-hd">
+            <h2>智能洞察</h2>
+            <span class="insight-sub">服务端告警 · 运行日志 · 设备心跳 · AI 决策预案 · 节水减碳</span>
+            <button type="button" class="insight-btn ghost sm" id="insightRefreshBtn">刷新</button>
+            <button type="button" class="insight-close" id="insightCloseBtn">✕</button>
+        </div>
+
+        <div class="insight-tabs">
+            <button type="button" class="insight-tab active" data-tab="alerts">告警中心</button>
+            <button type="button" class="insight-tab" data-tab="logs">运行日志</button>
+            <button type="button" class="insight-tab" data-tab="device">设备状态</button>
+            <button type="button" class="insight-tab" data-tab="plans">AI 决策预案</button>
+            <button type="button" class="insight-tab" data-tab="metrics">节水减碳</button>
+        </div>
+
+        <div class="insight-body">
+            <!-- Tab 1：告警中心 -->
+            <div class="insight-pane active" id="insightPane-alerts">
+                <div class="insight-toolbar">
+                    <h3>告警记录（最多 100 条）</h3>
+                </div>
+                <div id="insightAlertList"></div>
+            </div>
+
+            <!-- Tab 2：运行日志 -->
+            <div class="insight-pane" id="insightPane-logs">
+                <div class="insight-toolbar">
+                    <h3>运行日志（最多 200 条）</h3>
+                </div>
+                <div id="insightLogList"></div>
+            </div>
+
+            <!-- Tab 3：设备状态 -->
+            <div class="insight-pane" id="insightPane-device">
+                <div class="insight-toolbar">
+                    <h3>设备在线状态</h3>
+                </div>
+                <div id="insightDeviceBody"></div>
+            </div>
+
+            <!-- Tab 4：AI 决策预案 -->
+            <div class="insight-pane" id="insightPane-plans">
+                <div class="insight-toolbar">
+                    <h3>AI 决策预案（人工确认后才会下发）</h3>
+                    <button type="button" class="insight-btn" id="insightProposeBtn">生成预案</button>
+                </div>
+                <div id="insightPlanCurrent"></div>
+                <div class="insight-toolbar" style="margin-top:20px;">
+                    <h3>历史预案</h3>
+                </div>
+                <div id="insightPlanHistory"></div>
+            </div>
+
+            <!-- Tab 5：节水减碳 -->
+            <div class="insight-pane" id="insightPane-metrics">
+                <div class="insight-toolbar">
+                    <h3>节水减碳估算（近 7 日）</h3>
+                </div>
+                <div id="insightMetricsBody"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- ===== 脚本：defer 保证按书写顺序执行（core -> store -> charts -> 业务 -> app） ===== -->
 <script src="{{ url_for('static', filename='js/core.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/store.js') }}" defer></script>
@@ -335,5 +404,6 @@
 <script src="{{ url_for('static', filename='js/weather.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/realtime.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/insight.js') }}" defer></script>
 </body>
 </html>
