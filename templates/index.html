@@ -4,16 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>青禾智灌 · 田间监控台</title>
-    <!-- 第三方库：defer 避免阻塞首屏解析；crossorigin + SRI 兼容 CDN 完整性校验 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.1/socket.io.min.js"
-            defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"
-            defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <!-- Leaflet：仅系统设置里的「地图选点 / 圈地」用到；加载失败时自动降级为手填经纬度 -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"
-          crossorigin="anonymous" referrerpolicy="no-referrer">
-    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"
-            defer crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- 第三方库：全部本地化到 /static/vendor，校园网无外网或 CDN 被重置时图表/地图仍可用。
+         版本：socket.io 4.7.1 / Chart.js 4.4.1 / Leaflet 1.9.4，见 static/vendor/README.md -->
+    <script src="{{ url_for('static', filename='vendor/socket.io.min.js') }}" defer></script>
+    <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}" defer></script>
+    <!-- Leaflet：仅系统设置里的「地图选点 / 圈地」用到；瓦片不可达时自动降级为手填经纬度 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
+    <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}" defer></script>
     <!-- 样式：按职责拆分，顺序 base -> dashboard -> modal -> insight -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">

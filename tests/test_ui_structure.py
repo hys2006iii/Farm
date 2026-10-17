@@ -120,8 +120,21 @@ def test_no_innerhtml_assignment_in_frontend():
     assert not offenders, "以下位置出现 innerHTML 赋值：%s" % offenders
 
 
-def test_service_worker_free_and_cdn_scripts_deferred(index_html):
-    """CDN 脚本必须 defer，避免阻塞首屏；同时不允许出现同步阻塞脚本标签。"""
-    for tag in re.findall(r"<script\b[^>]*>", index_html):
-        if "src=" in tag and "http" in tag:
-            assert "defer" in tag, "CDN 脚本未加 defer：%s" % tag
+def test_index_uses_vendored_assets_not_cdn(index_html):
+    """第三方库必须走本地 /static/vendor：校园网 CDN 常被重置，外链会让图表/地图静默失效。"""
+    external = [tag for tag in re.findall(r"<(?:script|link)\b[^>]*>", index_html)
+                if re.search(r"(?:src|href)=\"https?://", tag)]
+    assert not external, "index.html 仍引用外网资源：%s" % external
+    vendor = [
+        "vendor/socket.io.min.js",
+        "vendor/chart.umd.min.js",
+        "vendor/leaflet/leaflet.js",
+        "vendor/leaflet/leaflet.css",
+    ]
+    for rel in vendor:
+        path = STATIC / rel
+        assert path.is_file(), "缺少本地第三方库：%s" % rel
+        assert path.stat().st_size > 1024, "本地第三方库内容异常：%s" % rel
+    # Leaflet 的图片资源与 css 同目录，缺了会退化成破图标
+    for rel in ("images/marker-icon.png", "images/marker-shadow.png"):
+        assert (STATIC / "vendor" / "leaflet" / rel).is_file(), "缺少 Leaflet 图标：%s" % rel

@@ -285,9 +285,12 @@ def test_security_headers_present(client):
     assert resp.headers['Referrer-Policy'] == 'no-referrer'
 
 
-def test_csp_covers_cdns_and_hardening(client):
+def test_csp_keeps_scripts_same_origin(client):
+    """第三方库已本地化到 static/vendor，CSP 不应再放行外网 CDN 脚本/样式。"""
     csp = client.get('/').headers['Content-Security-Policy']
-    assert 'https://cdnjs.cloudflare.com' in csp
-    assert 'https://cdn.jsdelivr.net' in csp
+    assert 'cdnjs.cloudflare.com' not in csp
+    assert 'cdn.jsdelivr.net' not in csp
+    assert "script-src 'self' 'unsafe-inline';" in csp
+    assert "style-src 'self' 'unsafe-inline';" in csp
     assert "object-src 'none'" in csp
     assert "base-uri 'self'" in csp

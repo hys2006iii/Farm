@@ -40,12 +40,12 @@ HISTORY_MAX_LIMIT = 5000
 # 二、安全响应头
 # ============================================================
 
-#: 基础 CSP：允许同源脚本与内联（项目使用了内联 script/style），
-#: 图表库走 cdnjs / jsdelivr 两个 CDN；地块地图走 Leaflet(jsdelivr) + OSM 瓦片。
+#: 基础 CSP：脚本与样式全部本地化（socket.io / Chart.js / Leaflet 在 static/vendor），
+#: 因此 script-src / style-src 只放同源，不再放行外网 CDN；地图瓦片是 <img>，img-src 放行 https。
 CSP_POLICY = (
     "default-src 'self'; "
-    "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; "
-    "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+    "script-src 'self' 'unsafe-inline'; "
+    "style-src 'self' 'unsafe-inline'; "
     "img-src 'self' data: https:; "
     "connect-src 'self' https:; "
     "font-src 'self' data:; "
