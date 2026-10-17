@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="青禾智灌知识库：稻田灌溉基础、根区氧环境、智能灌溉决策与系统内核说明">
+    <title>青禾智灌 · 知识库</title>
+    <!-- 样式：base 提供设计令牌与顶栏，knowledge 只负责本页版式 -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/knowledge.css') }}">
+</head>
+<body class="kb-page">
+
+<div class="topbar kb-topbar">
+    <div class="topbar-left">
+        <svg class="topbar-mark" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 21V9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M12 12C9 12 6 10.5 6 6.5C10 6.5 12 8.5 12 12Z" fill="currentColor" opacity=".85"/>
+            <path d="M12 9C15 9 18 7.5 18 3.5C14 3.5 12 5.5 12 9Z" fill="currentColor" opacity=".55"/>
+        </svg>
+        <a class="kb-brand" href="/index">青禾智灌</a>
+        <span class="topbar-title">知识库 · 田间手册</span>
+    </div>
+    <div class="topbar-right">
+        <nav class="kb-nav" aria-label="章节快速跳转">
+            <a href="#ch-1">灌溉基础</a>
+            <a href="#ch-2">氧环境</a>
+            <a href="#ch-3">看天看地</a>
+            <a href="#ch-4">系统内核</a>
+            <a href="#ch-5">操作问答</a>
+        </nav>
+        <button type="button" class="topbar-btn kb-toc-toggle" id="kbTocToggle"
+                aria-controls="kbToc" aria-expanded="false">目录</button>
+        <a class="topbar-btn topbar-btn--accent kb-back-link" href="/index">返回看板</a>
+    </div>
+</div>
+
+<div class="kb-progress" role="presentation" aria-hidden="true">
+    <span class="kb-progress-bar" id="kbProgressBar"></span>
+</div>
+
+<div class="kb-shell">
+
+    <aside class="kb-toc" id="kbToc" aria-label="章节目录">
+        <div class="kb-toc-hd">
+            <span class="kb-toc-title">章节目录</span>
+            <span class="kb-toc-count">五章</span>
+        </div>
+        <div class="kb-search">
+            <svg class="kb-search-icon" viewBox="0 0 20 20" aria-hidden="true">
+                <circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="1.5"/>
+                <path d="M13 13L17.5 17.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+            <input type="search" id="kbSearch" class="kb-search-input" autocomplete="off"
+                   placeholder="搜索章节标题…" aria-label="搜索章节标题">
+        </div>
+        <p class="kb-search-hint" id="kbSearchHint">按标题筛选，清空即恢复全部。</p>
+
+        <ol class="kb-toc-list" id="kbTocList">
+            <li class="kb-toc-ch" data-kb-group>
+                <a class="kb-toc-link kb-toc-link--ch" href="#ch-1" data-toc-link="ch-1">第一章 · 稻田灌溉的基础</a>
+                <ol class="kb-toc-sub">
+                    <li><a class="kb-toc-link" href="#ch-1-1" data-toc-link="ch-1-1">淹灌、湿润与晒田</a></li>
+                    <li><a class="kb-toc-link" href="#ch-1-2" data-toc-link="ch-1-2">各生育期的需水特点</a></li>
+                    <li><a class="kb-toc-link" href="#ch-1-3" data-toc-link="ch-1-3">水位与土壤湿度怎么看</a></li>
+                </ol>
+            </li>
+            <li class="kb-toc-ch" data-kb-group>
+                <a class="kb-toc-link kb-toc-link--ch" href="#ch-2" data-toc-link="ch-2">第二章 · 根区氧环境</a>
+                <ol class="kb-toc-sub">
+                    <li><a class="kb-toc-link" href="#ch-2-1" data-toc-link="ch-2-1">深淹为什么会让根缺氧</a></li>
+                    <li><a class="kb-toc-link" href="#ch-2-2" data-toc-link="ch-2-2">DO 与 Eh 怎么读</a></li>
+                    <li><a class="kb-toc-link" href="#ch-2-3" data-toc-link="ch-2-3">产甲烷与减排的关系</a></li>
+                </ol>
+            </li>
+            <li class="kb-toc-ch" data-kb-group>
+                <a class="kb-toc-link kb-toc-link--ch" href="#ch-3" data-toc-link="ch-3">第三章 · 怎么看天看地</a>
+                <ol class="kb-toc-sub">
+                    <li><a class="kb-toc-link" href="#ch-3-1" data-toc-link="ch-3-1">传感器标定：ADC 到物理量</a></li>
+                    <li><a class="kb-toc-link" href="#ch-3-2" data-toc-link="ch-3-2">RORI 四因子与 70/40 分级</a></li>
+                    <li><a class="kb-toc-link" href="#ch-3-3" data-toc-link="ch-3-3">六日降雨前馈与动态阈值</a></li>
+                    <li><a class="kb-toc-link" href="#ch-3-4" data-toc-link="ch-3-4">滞回与防抖</a></li>
+                </ol>
+            </li>
+            <li class="kb-toc-ch" data-kb-group>
+                <a class="kb-toc-link kb-toc-link--ch" href="#ch-4" data-toc-link="ch-4">第四章 · 青禾智灌系统内核</a>
+                <ol class="kb-toc-sub">
+                    <li><a class="kb-toc-link" href="#ch-4-1" data-toc-link="ch-4-1">四阶段闭环</a></li>
+                    <li><a class="kb-toc-link" href="#ch-4-2" data-toc-link="ch-4-2">数据从哪来到哪去</a></li>
+                    <li><a class="kb-toc-link" href="#ch-4-3" data-toc-link="ch-4-3">AI 预案与人机确认</a></li>
+                    <li><a class="kb-toc-link" href="#ch-4-4" data-toc-link="ch-4-4">边云协同与红线兜底</a></li>
+                    <li><a class="kb-toc-link" href="#ch-4-5" data-toc-link="ch-4-5">告警与日志</a></li>
+                    <li><a class="kb-toc-link" href="#ch-4-6" data-toc-link="ch-4-6">尚未实现的部分</a></li>
+                </ol>
+            </li>
+            <li class="kb-toc-ch" data-kb-group>
+                <a class="kb-toc-link kb-toc-link--ch" href="#ch-5" data-toc-link="ch-5">第五章 · 操作问答</a>
+                <ol class="kb-toc-sub">
+                    <li><a class="kb-toc-link" href="#ch-5-1" data-toc-link="ch-5-1">阈值与自动补水</a></li>
+                    <li><a class="kb-toc-link" href="#ch-5-2" data-toc-link="ch-5-2">AI、断网与数据</a></li>
+                </ol>
+            </li>
+        </ol>
+
+        <div class="kb-toc-foot">内容与当前代码实现一致</div>
+    </aside>
+
+    <main class="kb-main">
+
+        <header class="kb-hero">
+            <p class="kb-eyebrow">田间知识手册</p>
+            <h1>把稻田的「水、气、碳」讲清楚</h1>
+            <p class="kb-lede">
+                这份手册写给懂农事、但不写代码的人：先讲水稻什么时候需要水、为什么根区会缺氧，
+                再讲青禾智灌凭什么判断「该不该补水、要不要增氧」，最后把常见操作的疑问逐条回答。
+                文中所有数字都来自当前系统代码与设计文档，页面本身不参与任何控制。
+            </p>
+            <div class="kb-hero-meta">
+                <span class="kb-meta-item">适用对象：农场管理者 / 操作员</span>
+                <span class="kb-meta-item">数值口径：qinghe/config.py · 详细设计说明书</span>
+                <span class="kb-meta-item">更新方式：随系统版本更新</span>
+            </div>
+            <div class="kb-seal" aria-hidden="true"><span>青禾</span><span>智灌</span></div>
+        </header>
+
+        <!-- ================= 第一章 ================= -->
+        <section class="kb-chapter" aria-labelledby="ch-1">
+            <div class="kb-ch-head">
+                <span class="kb-ch-num">第一章</span>
+                <h2 class="kb-ch-title" id="ch-1" data-toc-target="ch-1" tabindex="-1">稻田灌溉的基础</h2>
+                <p class="kb-ch-lede">
+                    水稻耐淹，不等于喜欢长期泡在水里。灌溉方式决定了田面有没有水层、根区能不能换气，
+                    也决定了用水量和甲烷排放。先分清几种灌法，再看不同生育期到底怕什么。
+                </p>
+            </div>
+
+            <h3 class="kb-sub" id="ch-1-1" data-toc-target="ch-1-1">淹灌、湿润与晒田</h3>
+            <p class="kb-p">
+                同样是「灌水」，做法不同，根区环境差别很大。传统稻田最常见的是长期保持水层，
+                但水层一盖上，土壤和空气的接触就断了，根区氧气只能靠水里的溶解氧和稻株通气组织补给，
+                很快就不够用。所以灌溉方式的选择，本质上是在「保水、抑草、控温」和「给根供氧」之间找平衡。
+            </p>
+            <div class="kb-table-wrap">
+                <table class="kb-table">
+                    <caption>三种常见灌水方式对比</caption>
+                    <thead>
+                    <tr>
+                        <th scope="col">方式</th>
+                        <th scope="col">田间做法</th>
+                        <th scope="col">根区氧环境</th>
+                        <th scope="col">适合什么时候用</th>
+                        <th scope="col">代价</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <th scope="row">长期淹灌</th>
+                        <td>田面保持 5–10 cm 水层，少了就补</td>
+                        <td>最差。水层隔断空气，通常 2–3 天根区就转入缺氧</td>
+                        <td>返青期保苗、低温时保温、杂草重的田块</td>
+                        <td>耗水最多，深层渗漏和甲烷排放都高</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">浅湿灌溉</th>
+                        <td>灌 2–3 cm 浅水，自然落干到田面无水、土壤仍湿润，再复水</td>
+                        <td>较好。根区周期性接触空气，氧化还原电位能回升</td>
+                        <td>分蘖期到乳熟期，日常灌溉的主体方式</td>
+                        <td>需要更细的水位管理，人工盯得勤</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">晒田</th>
+                        <td>主动排水落干 3–7 天，让田面轻微开裂</td>
+                        <td>最好。空气直接进入耕作层，还原性物质被氧化</td>
+                        <td>分蘖后期控制无效分蘖、促根下扎、为抽穗蓄力</td>
+                        <td>晒过头会干旱减产，砂性土和漏水田要缩短</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="kb-note">
+                <strong>一句话记住：</strong>水层是「保苗」的手段，不是「一直灌着」的理由。
+                浅湿交替加适时晒田，既能省水，也能把氧气带回根区。
+            </div>
+
+            <h3 class="kb-sub" id="ch-1-2" data-toc-target="ch-1-2">各生育期的需水特点</h3>
+            <p class="kb-p">
+                水稻不同生育期对缺水的敏感程度差得很远。返青期缺水会死苗，拔节孕穗期缺水会直接少穗粒，
+                而黄熟期要主动断水。系统的水位阈值是人为设置的，目前不会自动识别生育期，
+                所以换季时要按下面这张表手动调整。
+            </p>
+            <div class="kb-table-wrap">
+                <table class="kb-table">
+                    <caption>生育期与田间水层（农艺经验值）</caption>
+                    <thead>
+                    <tr>
+                        <th scope="col">生育期</th>
+                        <th scope="col">田间水层</th>
+                        <th scope="col">最怕什么</th>
+                        <th scope="col">管理要点</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <th scope="row">返青期</th>
+                        <td>薄水层 10–30 mm</td>
+                        <td>缺水萎蔫、漂苗</td>
+                        <td>插后灌水护苗，不晒田；此时水位下限不要设太低</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">分蘖前期</th>
+                        <td>浅水 5–20 mm</td>
+                        <td>深水抑制分蘖</td>
+                        <td>浅湿交替，够苗就准备晒田</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">分蘖后期</th>
+                        <td>落干晒田</td>
+                        <td>晒过头、砂土失水过快</td>
+                        <td>苗数够了就排水，叶色褪淡、田面微裂即可复水</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">拔节孕穗期</th>
+                        <td>水层 30–50 mm</td>
+                        <td>干旱，穗粒数下降</td>
+                        <td>需水高峰，不能断水；水位下限要抬高</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">抽穗开花期</th>
+                        <td>水层 30–50 mm</td>
+                        <td>高温干旱、花粉败育</td>
+                        <td>保持浅水，遇高温可适当加深</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">乳熟—黄熟期</th>
+                        <td>干湿交替，收前断水</td>
+                        <td>断水过早、籽粒不饱满</td>
+                        <td>收获前 7–10 天断水，方便机械下田</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="kb-note kb-note--gold">
+                <strong>系统默认阈值：</strong>水位区间 30–150 mm、土壤湿润度区间 40–80%，
+                见 <span class="kb-code">config.THRESH_DEFAULTS</span>。默认值只是通用起点，
+                返青期、孕穗期应把水位下限往上调；晒田期可以临时切到手动，避免自动补水打断晒田。
+            </div>
+
+            <h3 class="kb-sub" id="ch-1-3" data-toc-target="ch-1-3">水位与土壤湿度怎么看</h3>
+            <p class="kb-p">
+                系统有两路水相关读数，含义完全不同，不能混着看：
+            </p>
+            <div class="kb-grid">
+                <div class="kb-card">
+                    <h4>渠道水位（水位 A0）</h4>
+                    <p>探针式水位传感器，读的是田面水层有多深，换算范围 0–300 mm。
+                        水位高说明田面有存水，但说明不了根层土壤湿没湿透。</p>
+                </div>
+                <div class="kb-card">
+                    <h4>土壤湿润度（土壤 A2）</h4>
+                    <p>电容式土壤探头，读的是根层含水状况，换算范围 0–100%。
+                        数值越小越干，100% 表示探头处于最湿状态。它比水位更贴近根系实际感受。</p>
+                </div>
+            </div>
+            <pre class="kb-pre">
+ 田面水层（水位 A0）
+ ┌────────────────────────────────────┐
+ │ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░ │  ← 探针 ADC → 0–300 mm
+ ├────────────────────────────────────┤ 田面
+ │ 根区土壤（湿度 A2）                 │  ← 电容探头 ADC → 0–100%
+ │ 湿润度 =（4095 − ADC）/ 4095 × 100  │      ADC 越高越干
+ └────────────────────────────────────┘
+</pre>
+            <p class="kb-p">
+                为什么要两路一起看：刚灌水时田面已经有水层，但水还没渗到根层，土壤读数仍然偏低；
+                晒田时田面水干了，根层却还存着水。只看一路就会误判。
+                所以系统的水土风险项取「水位风险」和「土壤风险」中更大的那个，
+                而不是把两者相加——它们描述的是同一件「根区被水包住」的事，相加等于重复计算。
+            </p>
+        </section>
+
+        <!-- ================= 第二章 ================= -->
+        <section class="kb-chapter" aria-labelledby="ch-2">
+            <div class="kb-ch-head">
+                <span class="kb-ch-num">第二章</span>
+                <h2 class="kb-ch-title" id="ch-2" data-toc-target="ch-2" tabindex="-1">根区氧环境：DO 与 Eh</h2>
+                <p class="kb-ch-lede">
+                    这套系统真正盯着看的不是「土干不干」，而是「根还喘不喘得上气」。
+                    溶解氧和氧化还原电位是判断根区氧环境的两个关键读数，也是甲烷排放的先行指标。
+                </p>
+            </div>
+
+            <h3 class="kb-sub" id="ch-2-1" data-toc-target="ch-2-1">深淹为什么会让根缺氧</h3>
+            <p class="kb-p">
+                氧气在水里的扩散速度比在空气里慢好几个数量级，水层一盖上，等于给土壤盖了层被子。
+                根要呼吸、土壤微生物也要呼吸，两边一起耗氧，补给却几乎断了。天气越热，耗氧越快，
+                而氧在水里的溶解度反而越低，所以高温期的深淹最危险。
+            </p>
+            <p class="kb-p">
+                缺氧不是一下子发生的，而是一个可以观察的过程：先是溶解氧往下掉，
+                接着氧化还原电位从正值掉到零附近，再往负值走。到了强还原状态，
+                产甲烷菌就开始占优势。
+            </p>
+            <pre class="kb-pre">
+ 淹水后根区变化（示意，用于理解趋势，不是实测曲线）
+ 时间 →        0h      6h      24h     3d      7d
+ DO（mg/L）    7.5     4.0     1.8     0.8     0.3
+ Eh（mV）     +250    +120     −20    −110    −160
+ 根区状态      有氧    过渡     缺氧    还原    强还原
+ 甲烷风险      低      低       中      高      很高
+</pre>
+            <p class="kb-p">
+                这张示意图想说明的事很简单：<strong>氧环境一旦开始恶化，越往后越难逆转</strong>。
+                与其等 Eh 掉到负值再去补救，不如在降雨和灌溉安排上就少制造一次长时间深淹。
+                这正是系统要做「降雨前馈」的原因。
+            </p>
+
+            <h3 class="kb-sub" id="ch-2-2" data-toc-target="ch-2-2">DO 与 Eh 怎么读</h3>
+            <div class="kb-table-wrap">
+                <table class="kb-table">
+                    <caption>两个核心氧环境指标</caption>
+                    <thead>
+                    <tr>
+                        <th scope="col">指标</th>
+                        <th scope="col">单位 / 量程</th>
+                        <th scope="col">读数怎么理解</th>
+                        <th scope="col">系统的评价口径</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <th scope="row">溶解氧 DO</th>
+                        <td>mg/L，0–20</td>
+                        <td>根区水里有多少氧。大于 5 较充足，2–5 偏紧，低于 2 基本是缺氧</td>
+                        <td>评价上限取 8.0 mg/L：超过 8.0 视为没有缺氧风险，
+                            量程剩余部分只用来观察过饱和峰值，不参与打分</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">氧化还原电位 Eh</th>
+                        <td>mV，−150–300</td>
+                        <td>反映土壤里「氧化剂」的多少。正值越高氧化性越强；
+                                0 附近开始转还原；低于 −100 mV 时产甲烷菌活跃</td>
+                        <td>评价区间 −150–300 mV：
+                            <span class="kb-code">S_Eh =（300 − Eh）/ 450</span>，
+                            300 mV 得 0，−150 mV 得 1</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="kb-p">
+                为什么两个都要看：DO 是「此刻还有没有氧」，反应快，但受温度、水流和探头扰动影响，
+                数值跳；Eh 是「这段时间被还原到什么程度」的累积结果，更稳，但反应慢。
+                两者互补，系统把它们都作为独立风险因子，权重各 0.35。
+            </p>
+
+            <h3 class="kb-sub" id="ch-2-3" data-toc-target="ch-2-3">产甲烷与减排的关系</h3>
+            <p class="kb-p">
+                产甲烷菌是严格厌氧菌，只有在氧被耗光、氧化还原电位足够低的环境里才旺盛。
+                稻田甲烷不是从土里直接冒出来的，大部分通过稻株的通气组织输送到大气。
+                所以「把氧送回根区」这件事，同时影响两件事：根的健康，和甲烷的生成量。
+            </p>
+            <div class="kb-grid">
+                <div class="kb-card">
+                    <h4>增氧抑甲烷</h4>
+                    <p>气泵把微纳米气泡打进根区，DO 抬升、Eh 回到正区间，
+                        产甲烷菌的生存条件被破坏，甲烷生成量下降。</p>
+                </div>
+                <div class="kb-card">
+                    <h4>前馈削峰</h4>
+                    <p>预报有雨就提前控水、不再灌满，减少暴雨后的长时间深淹，
+                        等于把最危险的厌氧窗口缩短。</p>
+                </div>
+            </div>
+            <div class="kb-note kb-note--warn">
+                <strong>减排数字的性质：</strong>系统按增氧时长折算甲烷减排（工程系数 0.8 g/h），
+                再用 GWP100 = 28 折算成 CO₂e。这是<strong>工程估算，不是实测排放量</strong>，
+                适合做同口径的横向比较和过程管理，不能当作碳交易凭证。
+            </div>
+            <div class="kb-note kb-note--seal">
+                <strong>红线判据：</strong>设计上，网关一旦轮询到
+                <strong>Eh ≤ −100 mV 或 DO ≤ 1.5mg/L</strong>，就本地直接开气泵满载，
+                不等云端结论、不等网络往返。需要说明：这一层「边缘固件自治强控」目前
+                <strong>尚未实现</strong>，当前版本仍靠平台侧的风险分级、告警与人工/自动调控兜底。
+            </div>
+        </section>
+
+        <!-- ================= 第三章 ================= -->
+        <section class="kb-chapter" aria-labelledby="ch-3">
+            <div class="kb-ch-head">
+                <span class="kb-ch-num">第三章</span>
+                <h2 class="kb-ch-title" id="ch-3" data-toc-target="ch-3" tabindex="-1">智能灌溉怎么看天看地</h2>
+                <p class="kb-ch-lede">
+                    「看地」是把传感器读数翻译成有农学含义的风险指数，「看天」是把未来六天的雨提前算进今天。
+                    这一章解释系统每一步判断的公式和阈值，看懂之后，界面上每个数字和动作文案都能对上号。
+                </p>
+            </div>
+
+            <h3 class="kb-sub" id="ch-3-1" data-toc-target="ch-3-1">传感器标定：ADC 到物理量</h3>
+            <p class="kb-p">
+                传感器给单片机的是 0–4095 的电压读数（12 位 ADC），不是毫米、不是 mg/L。
+                四路信号量纲互不相容，直接加权没有意义，所以第一步必须统一标定成物理量。
+                这一步的换算关系与固件、后端、前端三处保持一致。
+            </p>
+            <pre class="kb-pre">
+ 模拟量输入 → ADC（0–4095）→ 标定 → 物理量
+ ├─ 水位 A0  →  adc / 4095 × 300            →  0–300 mm（探针式，ADC 越高水越深）
+ ├─ 土壤 A2  → （4095 − adc）/ 4095 × 100    →  0–100%（电容式，ADC 越高越干）
+ ├─ DO   A4  →  adc / 4095 × 20.0           →  0–20 mg/L
+ └─ Eh   A6  →  −150 + adc / 4095 × 450     →  −150–300 mV
+</pre>
+            <div class="kb-note kb-note--gold">
+                <strong>最容易写反的一路：</strong>土壤探头是「ADC 越高越干」，
+                所以换算时要先取 4095 减掉读数。方向写反，整个风险模型的结论就会反过来——
+                越湿反而显示越干，系统会持续补水。
+            </div>
+
+            <h3 class="kb-sub" id="ch-3-2" data-toc-target="ch-3-2">RORI 四因子与 70/40 分级</h3>
+            <p class="kb-p">
+                RORI（根区缺氧风险指数）把四路信息融合成一个 0–100 的分数。四个子因子先各自
+                做有界归一化，再按复合加权融合，最后截断到 0–1 并乘 100。
+            </p>
+            <pre class="kb-pre">
+ S_Eh        = clamp(0, 1,（300 − Eh）/ 450)          Eh 评价区间 −150 ~ 300 mV
+ S_DO        = clamp(0, 1,（8.0 − DO）/ 8.0)          DO 评价上限 8.0 mg/L
+ Risk_water  =（水位 mm − 5）/ 100，水位 ≤ 5 mm 时为 0
+ Risk_soil   = 土壤湿润度 % / 100
+
+ P_risk = ω₁·S_Eh + ω₂·S_DO + ω₃·max(Risk_water, Risk_soil)
+          + γ·Risk_water × Risk_soil
+ RORI   = clamp(0, 1, P_risk) × 100
+</pre>
+            <p class="kb-p">
+                权重：ω₁ = ω₂ = <strong>0.35</strong>，ω₃ = <strong>0.30</strong>，
+                耦合系数 γ = <strong>0.5</strong>。三项权重加起来正好是 1.0，
+                所以水土侧取「水位、土壤两者更大的那个」，而不是相加——它们说的是同一件
+                「根区被水包住」的事。耦合项只有在深水层和土壤饱和同时出现时才起作用，
+                而那恰好是排碳风险最高的组合工况。
+            </p>
+            <div class="kb-table-wrap">
+                <table class="kb-table">
+                    <caption>RORI 三档分级与执行机构联动</caption>
+                    <thead>
+                    <tr>
+                        <th scope="col">级别</th>
+                        <th scope="col">RORI</th>
+                        <th scope="col">界面提示</th>
+                        <th scope="col">气泵动作</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <th scope="row">Ⅰ 重度厌氧</th>
+                        <td>≥ 70</td>
+                        <td>红色高危预警</td>
+                        <td>全载强制增氧，同时盯渠道水位</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Ⅱ 中度缺氧</th>
+                        <td>40 – 70</td>
+                        <td>橙色中危预警</td>
+                        <td>周期性脉冲加气</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Ⅲ 安全</th>
+                        <td>低于 40</td>
+                        <td>绿色安全</td>
+                        <td>低耗待机，网关照常轮询</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="kb-card kb-card--calc">
+                <h4>算一个例子</h4>
+                <p>
+                    现场读数：Eh = 0 mV、DO = 2.0 mg/L、水位 50 mm、土壤湿润度 70%。
+                    四个子因子分别是 0.667、0.75、0.45、0.70，代入后
+                    P_risk = 0.233 + 0.263 + 0.210 + 0.158 = 0.864，
+                    RORI ≈ <strong>86</strong>，判重度厌氧，气泵应满载增氧。
+                </p>
+                <p class="kb-card-sub">
+                    对照：Eh = 280 mV、DO = 7.2 mg/L、水位在死区内、土壤 55% 时，
+                    RORI ≈ 22，落在安全区，气泵保持低耗待机。同一套公式，读数一换，动作就不同。
+                </p>
+            </div>
+
+            <h3 class="kb-sub" id="ch-3-3" data-toc-target="ch-3-3">六日降雨前馈与动态阈值</h3>
+            <p class="kb-p">
+                传统灌溉的问题是纯后馈：等土干了才补水，常常灌完就下雨，水和电都白费，
+                暴雨后还容易长时间深淹。前馈就是把未来六天的雨提前算进今天：
+                预测有雨，就把触发补水的下限往下调，把「马上补水」改成「等雨再看」。
+            </p>
+            <pre class="kb-pre">
+ P6d = Σ(t=1..6) ω_t · P_t
+ ω_t = [1.0, 0.9, 0.7, 0.5, 0.4, 0.3]      越远的预报权重越低
+
+ α = 0.95   P6d ≤ 10 mm
+     0.75   10 mm &lt; P6d ≤ 50 mm
+     0.45   P6d &gt; 50 mm
+</pre>
+            <p class="kb-p">
+                衰减权重是为了压住远期预报的不确定性：第六天报 1 mm，只按 0.3 mm 计入。
+                α 随雨量增大而减小，因为雨越大，径流和深层渗漏占的比例越高，能留在根区的越少，
+                所以不能用「雨大就彻底停灌」这种粗放逻辑。
+            </p>
+            <pre class="kb-pre">
+ 策略一：前馈控水等雨（下调触发下限）
+ Limit_lower = max（45%, 基础下限 −（α · P6d / H_root）× 100%）
+ H_root = 200 mm   核心活动根系层厚度
+ 45%               防枯萎保底线，再往下调就是拿产量换水
+
+ 策略二：蓄雨型控灌（放宽蓄水上限）
+ P6d ≥ 15 mm 时：Limit_upper = min（100%, 基础上限 + 15）
+ P6d &lt; 15 mm 时：Limit_upper = 基础上限
+</pre>
+            <pre class="kb-pre">
+ 今天      D1     D2     D3     D4     D5     D6
+ 权重      1.0    0.9    0.7    0.5    0.4    0.3
+ 预报雨量  12     8      2      0      5      1     mm
+ 加权      12.0   7.2    1.4    0.0    2.0    0.3
+ P6d 合计 ≈ 22.9 mm  →  α = 0.75，且 ≥ 15 mm 触发蓄雨上限 +15
+ 若基础下限 60%：生效下限 = 60% − 0.75 × 22.9 / 200 × 100% ≈ 51.4%
+</pre>
+            <p class="kb-p">
+                举一个界面上真实会看到的判断：基础下限 60%、P6d = 40 mm、α = 0.75 时，
+                折算增量 = 0.75 × 40 / 200 × 100% = 15%，生效下限降到 45%，正好碰到保底线，
+                到此为止。这时水泵会进入「暂缓补水（hold）」，日志里写明：
+                「水位 12.0 mm 低于下限 30 mm，但 P6d = 22.4 mm，暂缓补水」。
+                用户看到的不是一个黑箱动作，而是动作背后的理由。
+            </p>
+
+            <h3 class="kb-sub" id="ch-3-4" data-toc-target="ch-3-4">滞回与防抖</h3>
+            <p class="kb-p">
+                田里的水位和传感器读数都在小幅波动。如果一越过阈值就启停，水泵会频繁动作，
+                既伤设备也浪费电。系统用三层滞回把临界值附近的抖动挡掉：
+            </p>
+            <div class="kb-table-wrap">
+                <table class="kb-table">
+                    <caption>三层滞回去抖</caption>
+                    <thead>
+                    <tr>
+                        <th scope="col">层级</th>
+                        <th scope="col">规则</th>
+                        <th scope="col">解决什么</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <th scope="row">区间滞回</th>
+                        <td>水位在上下限之间（默认 30–150 mm）时水泵待命，不动作</td>
+                        <td>水位在阈值附近来回波动时的反复启停</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">时间滞回</th>
+                        <td>服务端托管时，同一设备两次动作之间有最小间隔（约 60 秒）</td>
+                        <td>短时间内的重复下达</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">变化才下发</th>
+                        <td>目标状态与上一状态相同，就不下发指令</td>
+                        <td>MQTT 指令刷屏、设备端重复执行</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="kb-note">
+                <strong>还有一个提前量：</strong>预测有雨时，气泵会在 RORI 分级基础上
+                <strong>提前一级</strong>增氧（安全档变脉冲、中度变满载），
+                目的就是赶在雨后深淹把 Eh 打崩之前先把氧补上。
+            </div>
+        </section>
+
+        <!-- ================= 第四章 ================= -->
+        <section class="kb-chapter" aria-labelledby="ch-4">
+            <div class="kb-ch-head">
+                <span class="kb-ch-num">第四章</span>
+                <h2 class="kb-ch-title" id="ch-4" data-toc-target="ch-4" tabindex="-1">青禾智灌的系统内核</h2>
+                <p class="kb-ch-lede">
+                    前面讲的是「为什么这么判断」，这一章讲「系统怎么把它跑起来」：
+                    四阶段闭环、数据从哪里来、AI 在里面扮演什么角色、哪些动作必须人拍板，
+                    以及断网时到底还剩多少能力。
+                </p>
+            </div>
+
+            <h3 class="kb-sub" id="ch-4-1" data-toc-target="ch-4-1">四阶段闭环</h3>
+            <pre class="kb-pre">
+ ① 多源感知
+ ├─ 水位 A0 · 土壤 A2 · 溶解氧 A4 · 氧化还原电位 A6
+ ├─ 每 3 秒上报 → MQTT /esp32e/data → 华为云 IoTDA → 后端
+ ▼
+ ② 风险计算
+ ├─ 四个子因子 → RORI（0–100）→ 三档（70 / 40）
+ ├─ 六日降雨 P6d → α → 生效下限 / 生效上限
+ ▼
+ ③ 智能决策
+ ├─ DeepSeek 推理 → 预案（待确认）→ 人工确认 / 拒绝 → 下发
+ └─ 无密钥 / 超时 / 解析失败 → decide_control 规则回退
+ ▼
+ ④ 自动调控
+ ├─ 气泵 D5（PWM 5kHz / 8bit）：待机 / 脉冲 / 满载
+ ├─ 水泵 D7+D9：开 / 关 / 暂缓（hold）
+ └─ 边缘兜底：Eh ≤ −100 mV 或 DO ≤ 1.5mg/L（固件层尚未实现）
+</pre>
+            <p class="kb-p">
+                闭环上有三条硬约束：<strong>状态真正变化才下发</strong>；
+                同一设备两次动作之间留最小时间间隔；<strong>人工接管优先于任何自动策略</strong>，
+                切换即生效并留痕。这三条决定了系统不会「过于积极」。
+            </p>
+
+            <h3 class="kb-sub" id="ch-4-2" data-toc-target="ch-4-2">数据从哪来到哪去</h3>
+            <pre class="kb-pre">
+ ① 感知：设备 → 平台
+ ├─ 传感器 A0 / A2 / A4 / A6 → ESP32-E 网关
+ ├─ ESP32-E ── MQTT /esp32e/data（约 3 秒一帧）──▶ 华为云 IoTDA
+ ├─ 后端订阅 → 解析报文 → 刷新遥测缓存
+ └─ 遥测缓存 ── SocketIO 推送 ──▶ 浏览器；同时批量入队 → SQLite（WAL）
+
+ ② 决策：平台内部
+ ├─ 遥测 + 阈值 + 六日预报 → RORI / 动态阈值 / decide_control
+ ├─ DeepSeek 预案（pending）→ 人确认 / 拒绝 → 白名单过滤
+ └─ 规则回退（无密钥 / 超时 / 解析失败）→ decide_control
+
+ ③ 执行：平台 → 设备
+ ├─ 后端校验 → MQTT /esp32e/cmd
+ ├─ ESP32-E 执行 → 气泵 D5 / 水泵 D7+D9
+ └─ 设备状态回传 → 回到 ①，闭环完成
+</pre>
+            <p class="kb-p">
+                为什么上报要「批量落库」：MQTT 回调线程只做解析和入队，后台线程每秒或攒满一批
+                再统一写库，队列有上限、满了丢最旧。这样高频上报不会因为磁盘写入把实时推送拖慢。
+                数据库用 SQLite 的 WAL 模式，读写互不阻塞，单机部署零运维。
+            </p>
+
+            <h3 class="kb-sub" id="ch-4-3" data-toc-target="ch-4-3">AI 预案与人机确认</h3>
+            <p class="kb-p">
+                问答式 AI 的问题是结论停在对话框里，落不到执行机构。系统的做法是让它交一份
+                「待确认的预案」，人拍板之后才下发。整个流程分四步：
+            </p>
+            <div class="kb-steps">
+                <div class="kb-step">
+                    <span class="kb-step-num">1</span>
+                    <div>
+                        <h4>注入感知</h4>
+                        <p>汇总 RORI、风险等级、水位、土壤、DO、Eh、两个泵状态、P6d、α、
+                            生效阈值、是否手动、时间戳等十四项上下文。缺的项记为空，不编造。</p>
+                    </div>
+                </div>
+                <div class="kb-step">
+                    <span class="kb-step-num">2</span>
+                    <div>
+                        <h4>强制显式推理</h4>
+                        <p>要求模型只输出 JSON，字段为 reasoning、actions、summary、risk。
+                            模型必须先说明「为什么此刻不补水」，再给动作，不能只丢结论。</p>
+                    </div>
+                </div>
+                <div class="kb-step">
+                    <span class="kb-step-num">3</span>
+                    <div>
+                        <h4>落库待确认</h4>
+                        <p>预案写入数据库并置为待确认，界面显示完整推理文本和动作清单
+                            （设备 / 动作 / 理由），人可以确认，也可以填理由拒绝。</p>
+                    </div>
+                </div>
+                <div class="kb-step">
+                    <span class="kb-step-num">4</span>
+                    <div>
+                        <h4>确认后才下发</h4>
+                        <p>校验归属与待确认状态，超过 600 秒自动过期；下发前按白名单过滤，
+                            只允许气泵 / 水泵的开关，随后写一条预案日志和一条自动动作告警。</p>
+                    </div>
+                </div>
+            </div>
+            <div class="kb-note kb-note--gold">
+                <strong>模型不可用时怎么办：</strong>没有密钥、调用失败或返回解析不了时，
+                自动退化为 <span class="kb-code">decide_control</span> 的规则方案
+                （RORI 分级 + 水位滞回 + 降雨前馈），并在 reasoning 中写明这是规则依据，
+                用「未使用 AI」标记出来。系统不会因为缺大模型就失去调控能力，
+                也不会把规则结论伪装成模型推的。
+            </div>
+
+            <h3 class="kb-sub" id="ch-4-4" data-toc-target="ch-4-4">边云协同与红线兜底</h3>
+            <p class="kb-p">
+                整套判断分三层，越往下越「不讲道理」，也越可靠：
+            </p>
+            <div class="kb-table-wrap">
+                <table class="kb-table">
+                    <caption>边云协同三层分工</caption>
+                    <thead>
+                    <tr>
+                        <th scope="col">层级</th>
+                        <th scope="col">在哪算</th>
+                        <th scope="col">负责什么</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <th scope="row">第一层</th>
+                        <td>云端 / Web 端</td>
+                        <td>解算 RORI 与动态阈值方程，把物理低阶信号变成有农学含义的特征</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">第二层</th>
+                        <td>大模型（DeepSeek）</td>
+                        <td>做长周期的策略推理，输出兼顾节水和低碳的预案，由人确认</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">第三层</th>
+                        <td>网关（边缘）</td>
+                        <td>硬编码两条红线，轮询到就直接本地强控，是否决权最高的一层</td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="kb-p">
+                红线为什么取 <strong>Eh ≤ −100 mV</strong> 或 <strong>DO ≤ 1.5mg/L</strong>：
+                这两个值已经越过中度缺氧的农学边界，落在产甲烷菌群活跃的区间里，
+                这时候任何犹豫都会变成实实在在的排放。这一层同时也是断网时的兜底。
+                需要再强调一次：<strong>边缘固件自治强控目前尚未实现</strong>，
+                红线判据只写进了设计，实测固件还没落地，这是当前版本最明显的缺口。
+            </p>
+
+            <h3 class="kb-sub" id="ch-4-5" data-toc-target="ch-4-5">告警与日志</h3>
+            <p class="kb-p">
+                系统把「发生了什么」分成两类记录：告警是需要人注意的异常，日志是运行过程的流水。
+                两者都落在服务端，刷新页面不会丢。
+            </p>
+            <div class="kb-grid">
+                <div class="kb-card">
+                    <h4>九类告警类型码</h4>
+                    <p>
+                        土壤过低 / 土壤过高 / 水位过低 / 水位过高 / RORI 中度 / RORI 重度 /
+                        设备离线 / 预案待确认 / 自动动作。同一用户、同一类型、同一段正文
+                        在 60 秒冷却窗内只落一条，避免刷屏。
+                    </p>
+                </div>
+                <div class="kb-card">
+                    <h4>六类日志来源</h4>
+                    <p>
+                        system（系统）/ device（设备）/ auto（自动调控）/
+                        manual（手动）/ plan（预案）/ config（配置）。
+                        守护线程每秒或攒满一批批量落库，因果链可跨端回放。
+                    </p>
+                </div>
+            </div>
+            <p class="kb-p">
+                遥测历史默认保留 7 天，告警与日志同样可在服务端查询。历史遥测和告警都能导出
+                CSV（带 UTF-8 BOM，Excel 打开中文不乱码），接口分别是
+                <span class="kb-code">/api/export/history.csv</span> 和
+                <span class="kb-code">/api/export/alerts.csv</span>。
+            </p>
+
+            <h3 class="kb-sub" id="ch-4-6" data-toc-target="ch-4-6">尚未实现的部分</h3>
+            <p class="kb-p">
+                把边界写清楚，比把话说满更有用。下面这些能力在设计里已经定义，
+                但当前版本的代码里<strong>尚未实现</strong>：
+            </p>
+            <ul class="kb-list">
+                <li>
+                    <strong>边缘固件自治强控</strong>——红线判据只写进设计，固件主循环里还没实现。
+                    断网时不经云端直接强控、并把「边缘保底事件」回传平台展示，都还没做。
+                </li>
+                <li>
+                    <strong>微信小程序端</strong>——后端已预留 JWT 登录和指令下发两个接口，
+                    客户端尚未实现。
+                </li>
+                <li>
+                    <strong>碳汇 MRV 数据对接</strong>——目前的甲烷减排是按增氧时长折算的工程估算，
+                    还没有接实测排放因子。
+                </li>
+                <li>
+                    <strong>多地块多设备</strong>——目前一个账号对应一块田，
+                    地块与设备两级实体尚未实现。
+                </li>
+            </ul>
+        </section>
+
+        <!-- ================= 第五章 ================= -->
+        <section class="kb-chapter" aria-labelledby="ch-5">
+            <div class="kb-ch-head">
+                <span class="kb-ch-num">第五章</span>
+                <h2 class="kb-ch-title" id="ch-5" data-toc-target="ch-5" tabindex="-1">操作问答</h2>
+                <p class="kb-ch-lede">
+                    这一章按实际操作中问得最多的顺序排列，点开问题看回答。
+                    如果回答里提到「阈值」「托管」「预案」，说明都在看板的对应面板里。
+                </p>
+            </div>
+
+            <h3 class="kb-sub" id="ch-5-1" data-toc-target="ch-5-1">阈值与自动补水</h3>
+            <div class="kb-qa-list">
+                <details class="kb-qa" data-kb-qa>
+                    <summary>水位阈值设多少合适？</summary>
+                    <div class="kb-qa-body">
+                        <p>系统默认水位下限 30 mm、上限 150 mm。下限建议不低于 20–30 mm：
+                            返青期和拔节孕穗期是缺水敏感期，下限可抬高到 40–50 mm。</p>
+                        <p>上限不建议超过 200 mm，水层越深根区越缺氧，超过量程的读数也没有意义。
+                            晒田期间可以临时切到手动，或者在面板上把上下限一起调低，
+                            避免自动补水把晒田打断。</p>
+                    </div>
+                </details>
+                <details class="kb-qa" data-kb-qa>
+                    <summary>土壤湿润度 40 / 80 是什么意思？</summary>
+                    <div class="kb-qa-body">
+                        <p>它是电容探头换算出来的「湿润度」：0% 最干、100% 最湿。
+                            下限 40% 表示低于这个值就认为根层偏干、进入补水判断；
+                            上限 80% 是常规蓄水上限，超过就关泵。</p>
+                        <p>注意这个值不等于重量含水率，它只用于系统内部判断和前后对比，
+                            不要拿它跟实验室测的土壤含水率直接换算。</p>
+                    </div>
+                </details>
+                <details class="kb-qa" data-kb-qa>
+                    <summary>为什么水已经偏低了，系统还是没有自动补水？</summary>
+                    <div class="kb-qa-body">
+                        <p>按可能性依次检查：</p>
+                        <p>① 自动托管没开，或当前处于手动模式，人工接管优先；<br>
+                            ② 水位还在上下限区间内，滞回逻辑不会动作；<br>
+                            ③ 预报有雨，系统进入「暂缓补水（hold）」，此时日志里会写
+                            「预测降雨 P6d = …，暂缓补水」；<br>
+                            ④ 设备离线，指令发不出去。看板右上角与「设备状态」能看到静默时长。</p>
+                    </div>
+                </details>
+                <details class="kb-qa" data-kb-qa>
+                    <summary>RORI 已经超过 70 了，气泵为什么没动静？</summary>
+                    <div class="kb-qa-body">
+                        <p>先确认自动托管是开启状态，再看设备是否在线。另外服务端对同一设备
+                            两次动作之间有最小间隔，短时间内不会连续下发。</p>
+                        <p>如果指令已经发出但气泵没转，问题在设备侧：供电、继电器接线或
+                            PWM 通道。此时看板上的「气泵」状态会显示实际回传，而不是指令值。</p>
+                    </div>
+                </details>
+            </div>
+
+            <h3 class="kb-sub" id="ch-5-2" data-toc-target="ch-5-2">AI、断网与数据</h3>
+            <div class="kb-qa-list">
+                <details class="kb-qa" data-kb-qa>
+                    <summary>AI 会自己控制设备吗？</summary>
+                    <div class="kb-qa-body">
+                        <p>不会。AI 只生成「预案」，状态是待确认；必须有人点确认才会真正下发，
+                            超过 600 秒未处理自动过期。下发前还有白名单过滤，只允许气泵、水泵的开关。</p>
+                        <p>如果模型调用失败或没有配置密钥，系统会退回规则方案，并明确注明这是规则依据，
+                            不会伪造 AI 结论。</p>
+                    </div>
+                </details>
+                <details class="kb-qa" data-kb-qa>
+                    <summary>断网了会怎样？</summary>
+                    <div class="kb-qa-body">
+                        <p>设备静默超过 30 秒即判离线，看板会提示，同时停止基于旧数据的自动调控——
+                            数据不新鲜时继续「智能」，只会变成误动作。</p>
+                        <p>要坦白的是：设计中的「边缘固件自治强控」<strong>尚未实现</strong>，
+                            所以断网时本地不会自动执行红线强控，这是当前版本的缺口。
+                            网络恢复后 MQTT 重连，遥测会继续上报。</p>
+                    </div>
+                </details>
+                <details class="kb-qa" data-kb-qa>
+                    <summary>数据存在哪里？能留多久？能导出吗？</summary>
+                    <div class="kb-qa-body">
+                        <p>存在服务器本地的 SQLite 数据库（qinghe.db，WAL 模式），
+                            单机部署、无需额外数据库服务。遥测历史默认保留 7 天。</p>
+                        <p>可以导出：历史遥测用 <span class="kb-code">/api/export/history.csv</span>，
+                            告警用 <span class="kb-code">/api/export/alerts.csv</span>，
+                            文件带 UTF-8 BOM，Excel 打开中文不乱码。</p>
+                    </div>
+                </details>
+                <details class="kb-qa" data-kb-qa>
+                    <summary>为什么告警不会一直刷屏？</summary>
+                    <div class="kb-qa-body">
+                        <p>告警做了去重：同一用户、同一类型码、同一段正文，在 60 秒冷却窗内只落一条，
+                            随后异步推送到配置的 webhook（如钉钉机器人），失败会退避重试。</p>
+                        <p>如果某条告警反复出现，说明工况确实持续异常，这时应该处理现场，
+                            而不是反复确认掉告警。</p>
+                    </div>
+                </details>
+                <details class="kb-qa" data-kb-qa>
+                    <summary>手机上能用吗？有小程序吗？</summary>
+                    <div class="kb-qa-body">
+                        <p>网页端是响应式布局，手机浏览器可以直接打开看板，窄屏下本页目录会折叠成按钮。
+                            数据刷新走服务端推送，不需要额外安装。</p>
+                        <p>微信小程序端<strong>尚未实现</strong>：后端已预留 JWT 登录和指令下发接口，
+                            客户端还没有写。</p>
+                    </div>
+                </details>
+                <details class="kb-qa" data-kb-qa>
+                    <summary>「节水减碳」里的数字能当碳交易凭证吗？</summary>
+                    <div class="kb-qa-body">
+                        <p>不能。用水量是水位抬升折算的体积，不含渠道渗漏和蒸发；
+                            甲烷减排是按增氧时长乘工程系数（0.8 g/h）估算，再用 GWP100 = 28
+                            折算成 CO₂e，没有做箱法或涡度相关实测。</p>
+                        <p>它适合做同口径的横向比较和过程管理，不构成可核查的减排量。
+                            接口返回的 method 字段里也写明了这一点。</p>
+                    </div>
+                </details>
+            </div>
+        </section>
+
+        <footer class="kb-foot-note">
+            <p>
+                本页只做解释，不参与任何控制。控制逻辑、阈值与公式以服务端代码
+                （<span class="kb-code">qinghe/</span>）与《详细设计说明书》为准；
+                如需调整参数，请在看板的「系统设置 / 阈值」里操作，不要改本页。
+            </p>
+        </footer>
+
+    </main>
+</div>
+
+<button type="button" class="kb-top" id="kbTop" aria-label="回到顶部" title="回到顶部">
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+        <path d="M10 15.5V4.5M10 4.5L5 9.5M10 4.5L15 9.5"
+              fill="none" stroke="currentColor" stroke-width="1.6"
+              stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+</button>
+
+<div class="footer">青禾智灌智慧灌溉管理平台 · 知识库 · 田间记录本</div>
+
+<script src="{{ url_for('static', filename='js/knowledge.js') }}" defer></script>
+</body>
+</html>
