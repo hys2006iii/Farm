@@ -366,8 +366,8 @@ CREATE INDEX IF NOT EXISTS idx_pump_runtime_user_day ON pump_runtime(user_id, da
 
 | 方法 | 路径 | 请求体字段 | 响应字段 | 状态码 | 鉴权 |
 | --- | --- | --- | --- | --- | --- |
-| POST | `/api/register` | `username`, `password` | `status`, `message` | 200 / 400 | 无 |
-| POST | `/api/login` | `username`, `password` | `status`, `message` | 200 / 429 | 无 |
+| POST | `/api/register` | `username`, `password` | `status`, `message` | 200 / **400** | 无 |
+| POST | `/api/login` | `username`, `password` | `status`, `message` | 200 / **400** / **401** / **429** | 无 |
 | GET | `/api/logout` | — | 302 重定向到 `/` | 302 | 无 |
 | POST | `/api/change_password` | `old_password`, `new_password` | `status`, `message` | 200 / 400 / 401 | 会话 |
 | POST | `/api/app_login` | `username`, `password` | `status`, `message`, `token`, `username` | 200 / 429 | 无 |
@@ -378,6 +378,16 @@ CREATE INDEX IF NOT EXISTS idx_pump_runtime_user_day ON pump_runtime(user_id, da
 - 登录：`'请输入账号和密码'`、`'账号或密码错误'`、`'登录成功'`
 - 限流（429）：`'尝试次数过多，请 10 分钟后再试'`
 - 改密：`'未授权'`(401)、`'新密码长度需为 6-64 字符'`、`'原密码错误'`、`'密码修改成功，请重新登录'`
+
+**状态码语义（响应体形状恒为 `{'status': ..., 'message': ...}`，仅状态码语义化）**：
+
+| 接口 | 200 | 400 | 401 | 429 |
+| --- | --- | --- | --- | --- |
+| `/api/register` | 注册成功 | 用户名/密码长度非法、账号已存在 | — | — |
+| `/api/login` | 登录成功 | 账号或密码为空 | 账号或密码错误 | 已锁定 |
+
+前端 `static/js/login.js` 两个处理函数都是 `.then(r => r.json())` 后按 `data.status` 分支
+（`login.js:45`、`login.js:74`），**不读 `res.ok` / HTTP 状态码**，故状态码语义化不影响前端。
 
 ### 3.3 配置
 

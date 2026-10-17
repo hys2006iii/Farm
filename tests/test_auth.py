@@ -1,4 +1,11 @@
-"""认证模块与认证接口测试：注册 / 登录 / 限流 / 改密 / JWT。"""
+"""认证模块与认证接口测试：注册 / 登录 / 限流 / 改密 / JWT。
+
+状态码契约（响应体形状始终为 `{'status': ..., 'message': ...}`，仅状态码语义化）：
+- 注册入参非法 / 账号已存在 → **400**；
+- 登录入参缺失 → **400**、凭据错误 → **401**、锁定中 → **429**；
+- 成功一律 200 + `status: success`。
+前端 `static/js/login.js` 只按 `data.status` 分支，不读 HTTP 状态码，故无需改动。
+"""
 
 import sqlite3
 import time
@@ -33,18 +40,21 @@ def test_register_creates_config_row(client):
 def test_register_duplicate_username(client):
     client.post('/api/register', json={'username': 'carol01', 'password': 'pw123456'})
     resp = client.post('/api/register', json={'username': 'carol01', 'password': 'pw123456'})
+    assert resp.status_code == 400
     assert resp.get_json() == {'status': 'error', 'message': '账号已存在'}
 
 
 @pytest.mark.parametrize('username', ['ab', '', 'x' * 21])
 def test_register_invalid_username_length(client, username):
     resp = client.post('/api/register', json={'username': username, 'password': 'pw123456'})
+    assert resp.status_code == 400
     assert resp.get_json()['message'] == '用户名长度需为 3-20 字符'
 
 
 @pytest.mark.parametrize('password', ['short', '', 'x' * 65])
 def test_register_invalid_password_length(client, password):
     resp = client.post('/api/register', json={'username': 'dave001', 'password': password})
+    assert resp.status_code == 400
     assert resp.get_json()['message'] == '密码长度需为 6-64 字符'
 
 
@@ -57,9 +67,9 @@ def test_register_stores_hash_not_plaintext(client):
 
 
 def test_register_empty_json_body(client):
-    """请求体为空时不应 500。"""
+    """请求体为空时不应 500（用户名长度非法 → 400）。"""
     resp = client.post('/api/register', json={})
-    assert resp.status_code == 200
+    assert resp.status_code == 400
     assert resp.get_json()['status'] == 'error'
 
 
@@ -75,17 +85,20 @@ def test_login_success_sets_session(client, registered):
 
 def test_login_missing_fields(client):
     resp = client.post('/api/login', json={'username': 'nobody', 'password': ''})
+    assert resp.status_code == 400
     assert resp.get_json() == {'status': 'error', 'message': '请输入账号和密码'}
 
 
 def test_login_wrong_password(client, registered):
     username, _ = registered
     resp = client.post('/api/login', json={'username': username, 'password': 'wrongpw'})
+    assert resp.status_code == 401
     assert resp.get_json() == {'status': 'error', 'message': '账号或密码错误'}
 
 
 def test_login_unknown_user(client):
     resp = client.post('/api/login', json={'username': 'ghost001', 'password': 'pw123456'})
+    assert resp.status_code == 401
     assert resp.get_json() == {'status': 'error', 'message': '账号或密码错误'}
 
 
@@ -108,6 +121,7 @@ def test_login_plaintext_wrong_password(client):
         conn.execute('UPDATE users SET password=? WHERE id=?', ('plainpw123', uid))
         conn.commit()
     resp = client.post('/api/login', json={'username': 'legacy02', 'password': 'nope1234'})
+    assert resp.status_code == 401
     assert resp.get_json()['status'] == 'error'
 
 
@@ -158,9 +172,9 @@ def test_login_limit_is_per_username_and_ip(client, registered):
     username, _ = registered
     for _ in range(config.LOGIN_MAX_FAIL):
         client.post('/api/login', json={'username': username, 'password': 'badpass'})
-    # 另一个用户名不受影响
+    # 另一个用户名不受影响：不被限流（凭据错仍是 401，而不是 429）
     resp = client.post('/api/login', json={'username': 'otheruser', 'password': 'whatever'})
-    assert resp.status_code == 200
+    assert resp.status_code == 401
 
 
 def test_login_forwarded_for_is_used_as_key(flask_app):
@@ -356,3 +370,87 @@ def test_sqlite_integrity_after_operations(flask_app):
 def test_sqlite_error_is_sqlite3_error():
     """确认 create_user 捕获的是 sqlite3.IntegrityError（防止重构后异常类型漂移）。"""
     assert issubclass(sqlite3.IntegrityError, sqlite3.DatabaseError)
+
+
+# ============================================================
+# 状态码契约（响应体形状不变，仅状态码语义化）
+# ============================================================
+
+def test_register_failure_status_codes_are_400(client):
+    """注册的三种失败分支全部返回 400，响应体形状保持 status/message。"""
+    cases = [
+        ({'username': 'ab', 'password': 'pw123456'}, '用户名长度需为 3-20 字符'),
+        ({'username': 'okuser1', 'password': 'short'}, '密码长度需为 6-64 字符'),
+    ]
+    for payload, message in cases:
+        resp = client.post('/api/register', json=payload)
+        assert resp.status_code == 400, payload
+        assert resp.get_json() == {'status': 'error', 'message': message}
+
+    client.post('/api/register', json={'username': 'dupuser1', 'password': 'pw123456'})
+    resp = client.post('/api/register', json={'username': 'dupuser1', 'password': 'pw123456'})
+    assert resp.status_code == 400
+    assert resp.get_json() == {'status': 'error', 'message': '账号已存在'}
+
+
+def test_register_success_stays_200(client):
+    """成功注册仍是 200 + success。"""
+    resp = client.post('/api/register', json={'username': 'gooduser', 'password': 'pw123456'})
+    assert resp.status_code == 200
+    assert resp.get_json() == {'status': 'success', 'message': '注册成功'}
+
+
+@pytest.mark.parametrize('payload,code,message', [
+    ({'username': '', 'password': ''}, 400, '请输入账号和密码'),
+    ({'username': 'nobody01', 'password': ''}, 400, '请输入账号和密码'),
+    ({'username': 'nobody01', 'password': 'whatever'}, 401, '账号或密码错误'),
+])
+def test_login_failure_status_codes(client, payload, code, message):
+    """登录入参缺失 400、凭据错误 401，响应体形状不变。"""
+    resp = client.post('/api/login', json=payload)
+    assert resp.status_code == code
+    assert resp.get_json() == {'status': 'error', 'message': message}
+
+
+def test_login_wrong_password_is_401(client, registered):
+    """已存在用户输错密码 → 401（不是 200）。"""
+    username, _ = registered
+    resp = client.post('/api/login', json={'username': username, 'password': 'wrongpw'})
+    assert resp.status_code == 401
+    assert resp.get_json() == {'status': 'error', 'message': '账号或密码错误'}
+
+
+def test_login_lockout_is_429_not_401(client, registered):
+    """锁定分支优先于凭据错误，仍返回 429。"""
+    username, password = registered
+    for _ in range(config.LOGIN_MAX_FAIL):
+        client.post('/api/login', json={'username': username, 'password': 'badpass'})
+    # 即使密码正确也应被限流拦截
+    resp = client.post('/api/login', json={'username': username, 'password': password})
+    assert resp.status_code == 429
+    assert resp.get_json() == {'status': 'error', 'message': '尝试次数过多，请 10 分钟后再试'}
+
+
+def test_login_success_is_200(client, registered):
+    """成功登录仍是 200 + success。"""
+    username, password = registered
+    resp = client.post('/api/login', json={'username': username, 'password': password})
+    assert resp.status_code == 200
+    assert resp.get_json() == {'status': 'success', 'message': '登录成功'}
+
+
+def test_app_login_wrong_password_body_unchanged(client, registered):
+    """app_login 失败响应体形状不变（JWT 接口未纳入本次状态码改造）。"""
+    username, _ = registered
+    resp = client.post('/api/app_login', json={'username': username, 'password': 'bad'})
+    assert resp.get_json() == {'status': 'error', 'message': '账号或密码错误'}
+
+
+def test_auth_responses_are_json_not_html(client):
+    """失败响应必须是 JSON（前端 r.json() 不能抛异常）。"""
+    for resp in (
+        client.post('/api/register', json={'username': 'ab', 'password': 'pw123456'}),
+        client.post('/api/login', json={'username': 'nobody01', 'password': 'bad'}),
+    ):
+        assert resp.mimetype == 'application/json'
+        assert isinstance(resp.get_json(), dict)

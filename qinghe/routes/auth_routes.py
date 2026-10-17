@@ -13,29 +13,37 @@ bp = Blueprint('auth_api', __name__)
 
 @bp.route('/api/register', methods=['POST'])
 def api_register():
-    """注册新账号：校验用户名/密码长度，成功后同时初始化 configs 行。"""
+    """注册新账号：校验用户名/密码长度，成功后同时初始化 configs 行。
+
+    入参非法（用户名/密码长度越界、账号已存在）返回 **400**，响应体形状
+    仍为 `{'status': 'error', 'message': ...}` 不变；成功 200 + `success`。
+    """
     data = request.json or {}
     username = (data.get('username') or '').strip()
     password = data.get('password') or ''
     # 输入校验：长度限制，防注入/超大请求
     if not (config.USERNAME_MIN_LEN <= len(username) <= config.USERNAME_MAX_LEN):
-        return jsonify({'status': 'error', 'message': '用户名长度需为 3-20 字符'})
+        return jsonify({'status': 'error', 'message': '用户名长度需为 3-20 字符'}), 400
     if not (config.PASSWORD_MIN_LEN <= len(password) <= config.PASSWORD_MAX_LEN):
-        return jsonify({'status': 'error', 'message': '密码长度需为 6-64 字符'})
+        return jsonify({'status': 'error', 'message': '密码长度需为 6-64 字符'}), 400
     uid = db.create_user(username, auth.hash_password(password))
     if uid is None:
-        return jsonify({'status': 'error', 'message': '账号已存在'})
+        return jsonify({'status': 'error', 'message': '账号已存在'}), 400
     return jsonify({'status': 'success', 'message': '注册成功'})
 
 
 @bp.route('/api/login', methods=['POST'])
 def api_login():
-    """网页登录：限流 → 校验密码 → 写入 session。"""
+    """网页登录：限流 → 校验密码 → 写入 session。
+
+    入参缺失返回 **400**、凭据错误返回 **401**、账号锁定中返回 **429**；
+    三者响应体形状均为 `{'status': 'error', 'message': ...}` 不变。
+    """
     data = request.json or {}
     username = (data.get('username') or '').strip()
     password = data.get('password') or ''
     if not username or not password:
-        return jsonify({'status': 'error', 'message': '请输入账号和密码'})
+        return jsonify({'status': 'error', 'message': '请输入账号和密码'}), 400
     if auth.login_throttle(username):
         return jsonify({'status': 'error', 'message': '尝试次数过多，请 10 分钟后再试'}), 429
     user, ok = auth.authenticate(username, password)
@@ -45,7 +53,7 @@ def api_login():
         session['username'] = user['username']
         return jsonify({'status': 'success', 'message': '登录成功'})
     auth.record_login_failure(username)
-    return jsonify({'status': 'error', 'message': '账号或密码错误'})
+    return jsonify({'status': 'error', 'message': '账号或密码错误'}), 401
 
 
 @bp.route('/api/logout')
