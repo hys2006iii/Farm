@@ -240,6 +240,116 @@ def extract_history_sample(values: dict, now_ms: int = None):
         return None
 
 
+def _to_float(value):
+    """把上报值尽力转成 float；非法或缺失返回 None。"""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+#: 服务端告警判定的最小间隔（秒），避免每条上报都查库
+_ALERT_EVAL_INTERVAL = 10.0
+_alert_eval_last = {}
+_alert_eval_lock = threading.Lock()
+
+
+def _feed_insight(uid, values: dict, now_ms: int) -> None:
+    """把一次设备上报分发给新增旁路模块（心跳 / 预案上下文 / 泵时长 / 自动调控 / 告警）。
+
+    本函数在 MQTT 回调线程中执行，**不得**阻塞、**不得**向上抛异常：
+    每个子系统独立 try/except，任一子系统故障都不影响遥测主链路。
+    """
+    try:
+        from qinghe import alert_center, autocontrol, heartbeat, irrigation, metrics, planner
+    except Exception:  # noqa: BLE001 - 新增模块缺失时静默跳过
+        return
+
+    # 1) 心跳：驱动服务端在线判定
+    try:
+        heartbeat.mark_seen(uid, now_ms)
+    except Exception:  # noqa: BLE001
+        pass
+
+    water_adc = _to_float(values.get('waterlevel'))
+    soil_adc = _to_float(values.get('humidity'))
+    do_mgl = _to_float(values.get('do'))
+    eh_mv = _to_float(values.get('eh'))
+
+    water_mm = irrigation.adc_to_water_mm(water_adc) if water_adc is not None else None
+    soil_pct = irrigation.adc_to_soil_pct(soil_adc) if soil_adc is not None else None
+    rori = None
+    if None not in (water_adc, soil_adc, do_mgl, eh_mv):
+        try:
+            rori = irrigation.compute_rori(water_adc, soil_adc, do_mgl, eh_mv)
+        except Exception:  # noqa: BLE001
+            rori = None
+
+    telemetry = {
+        'water_adc': water_adc,
+        'soil_adc': soil_adc,
+        'water_mm': water_mm,
+        'soil_pct': soil_pct,
+        'do_mgl': do_mgl,
+        'eh_mv': eh_mv,
+        'rori': rori,
+        'air_pump': values.get('air_pump'),
+        'water_pump': values.get('water_pump'),
+        'ts': now_ms,
+    }
+
+    # 2) 预案上下文缓存：供 /api/plan/propose 注入感知输入
+    try:
+        planner.update_telemetry(uid, **telemetry)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 3) 泵运行时长：驱动节水减碳看板
+    for device in ('air_pump', 'water_pump'):
+        state = values.get(device)
+        if state is None:
+            continue
+        try:
+            metrics.note_pump_state(uid, device, state, now_ms)
+        except Exception:  # noqa: BLE001
+            pass
+
+    # 4) 服务端自动调控（默认关闭；开启后带最小动作间隔滞回）
+    try:
+        autocontrol.evaluate(uid, telemetry)
+    except Exception:  # noqa: BLE001
+        pass
+
+    # 5) 服务端告警判定（限频，避免每条上报都查库）
+    if water_mm is None or soil_pct is None:
+        return
+    now_s = now_ms / 1000.0
+    with _alert_eval_lock:
+        last = _alert_eval_last.get(uid, 0.0)
+        if now_s - last < _ALERT_EVAL_INTERVAL:
+            return
+        _alert_eval_last[uid] = now_s
+    try:
+        from qinghe import db
+        row = db.load_thresholds(uid)
+        # load_thresholds 返回 sqlite3.Row 或 None；统一转成 dict 再取默认值
+        thresh = dict(row) if row else {}
+        alert_center.evaluate_and_push(
+            uid,
+            soil_pct,
+            water_mm,
+            rori if rori is not None else 0.0,
+            thresh.get('humi_down', 40),
+            thresh.get('humi_up', 80),
+            thresh.get('waterlevel_down', 30),
+            thresh.get('waterlevel_up', 150),
+        )
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def handle_mqtt_message(uid, topic, content, emit=None, writer=None) -> None:
     """把 MQTT 报文拆成字段，推给前端，并把历史数据放入批量写入队列。
 
@@ -258,6 +368,11 @@ def handle_mqtt_message(uid, topic, content, emit=None, writer=None) -> None:
     if sample is not None:
         water_adc, soil_adc, ts = sample
         writer.enqueue(uid, ts, water_adc, soil_adc)
+    else:
+        ts = int(time.time() * 1000)
+
+    # 旁路集成：心跳 / 预案上下文 / 泵时长 / 服务端自动调控 / 服务端告警
+    _feed_insight(uid, values, ts)
 
 
 # ============================================================
