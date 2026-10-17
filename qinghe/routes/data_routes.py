@@ -6,7 +6,7 @@
 
 from flask import Blueprint, jsonify, request, session
 
-from qinghe import alerts, config, db, weather
+from qinghe import alerts, config, db, validators, weather
 
 bp = Blueprint('data_api', __name__)
 
@@ -98,12 +98,19 @@ def api_reverse_geocode():
 
 @bp.route('/api/notify_alert', methods=['POST'])
 def api_notify_alert():
-    """前端检测到设备告警后调用，转发到用户配置的 webhook。"""
+    """前端检测到设备告警后调用，转发到用户配置的 webhook。
+
+    `msg` / `level` 类型错误返回 400（不 500）；`msg` 截断到 500 字符、
+    `level` 截断到 20 字符；空 `msg` 返回 400。
+    """
     if 'user_id' not in session:
         return jsonify({'status': 'error', 'message': '未授权'}), 401
     data = request.json or {}
-    msg = (data.get('msg') or '').strip()[:500]
-    level = (data.get('level') or 'warn').strip()[:20]
+    try:
+        msg = validators.truncated(data, 'msg', '', config.ALERT_CONTENT_MAX_LEN).strip()
+        level = validators.truncated(data, 'level', 'warn', config.ALERT_LEVEL_MAX_LEN).strip()
+    except validators.ValidationError as exc:
+        return jsonify({'status': 'error', 'message': exc.message}), exc.status
     if not msg:
         return jsonify({'status': 'error', 'message': '缺少告警内容'}), 400
     ok = alerts.notify_webhook(session['user_id'], '[青禾智灌] %s 告警' % level, msg)
