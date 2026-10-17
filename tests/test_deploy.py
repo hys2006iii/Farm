@@ -255,7 +255,7 @@ class TestGenSecret:
         assert gen_secret.main([]) == 0
         content = env_path.read_text(encoding="utf-8")
         assert "FARM_SECRET_KEY=" in content
-        assert "请替换为随机长字符串" not in content
+        assert "CHANGE_ME" not in content
 
     def test_env_example_contains_all_keys(self):
         """.env.example 必须覆盖 AGENTS.md 约定的全部环境变量。"""
