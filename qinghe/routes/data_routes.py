@@ -39,16 +39,24 @@ def api_history():
 
 @bp.route('/api/forecast', methods=['GET'])
 def api_forecast():
-    """降雨预报代理：从配置读取和风天气域名与 Key，转发 7 日预报，避免前端跨域。"""
+    """降雨预报代理：从配置读取和风天气域名与 Key，转发 7 日预报，避免前端跨域。
+
+    失败（未配置 Key / 上游异常 / 上游非 JSON）返回 **502**，响应体仍是
+    `{'code': 'ERR', 'error': ...}` 原样不变，前端 `static/js/weather.js` 只读
+    body 不读状态码，故降级分支照常走通。
+    """
     if 'user_id' not in session:
         return jsonify({'error': '未授权访问'}), 401
     cfg = db.load_weather_config(session['user_id'])
     if not cfg or not cfg['weather_key']:
-        return jsonify({'code': 'ERR', 'error': '未配置天气 API Key'})
+        return jsonify({'code': 'ERR', 'error': '未配置天气 API Key'}), 502
     domain = (cfg['weather_domain'] or config.DEFAULT_WEATHER_DOMAIN).strip()
     lng = request.args.get('lng') or cfg['farm_lng'] or '118.78'
     lat = request.args.get('lat') or cfg['farm_lat'] or '31.90'
-    return jsonify(weather.fetch_forecast(domain, lng, lat, cfg['weather_key']))
+    payload = weather.fetch_forecast(domain, lng, lat, cfg['weather_key'])
+    if weather.forecast_failed(payload):
+        return jsonify(payload), 502
+    return jsonify(payload)
 
 
 @bp.route('/api/reverse_geocode')

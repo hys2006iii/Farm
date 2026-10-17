@@ -250,6 +250,19 @@ def test_fetch_forecast_never_raises(monkeypatch):
     assert got['code'] == 'ERR'
 
 
+@pytest.mark.parametrize('payload,expected', [
+    ({'code': 'ERR', 'error': 'x'}, True),
+    ({'code': '200', 'daily': []}, False),
+    ({}, False),
+    (None, True),
+    ('not-a-dict', True),
+    ([], True),
+])
+def test_forecast_failed_classifies_payload(payload, expected):
+    """路由层据此选 502/200：只有明确失败体或非 dict 才判失败。"""
+    assert weather.forecast_failed(payload) is expected
+
+
 # ============================================================
 # 接口层：/api/forecast 与 /api/reverse_geocode（离线）
 # ============================================================
@@ -259,8 +272,9 @@ def test_api_forecast_requires_login(client):
 
 
 def test_api_forecast_without_key_returns_err(client, auth_headers):
+    """未配置 Key 属于服务端不可用，返回 502 且响应体保持 {code:ERR, error:...}。"""
     resp = client.get('/api/forecast', headers=auth_headers)
-    assert resp.status_code == 200
+    assert resp.status_code == 502
     assert resp.get_json() == {'code': 'ERR', 'error': '未配置天气 API Key'}
 
 
@@ -272,6 +286,7 @@ def test_api_forecast_with_key_proxies(client, auth_headers, monkeypatch):
     payload = {'code': '200', 'daily': [1, 2, 3, 4, 5, 6, 7]}
     monkeypatch.setattr(requests, 'get', lambda *a, **k: _Resp(payload))
     resp = client.get('/api/forecast?lng=118.78&lat=31.90', headers=auth_headers)
+    assert resp.status_code == 200
     assert resp.get_json() == payload
 
 
@@ -281,8 +296,38 @@ def test_api_forecast_non_json_upstream(client, auth_headers, monkeypatch):
     set_config(user_id_of('farmer01'), weather_key='WK')
     monkeypatch.setattr(requests, 'get', lambda *a, **k: _Resp(
         status_code=500, raise_json=True))
-    got = client.get('/api/forecast', headers=auth_headers).get_json()
-    assert got == {'code': 'ERR', 'error': '天气接口非 JSON（HTTP 500）'}
+    resp = client.get('/api/forecast', headers=auth_headers)
+    assert resp.status_code == 502
+    assert resp.get_json() == {'code': 'ERR', 'error': '天气接口非 JSON（HTTP 500）'}
+
+
+def test_api_forecast_network_error_returns_502(client, auth_headers, monkeypatch):
+    """上游请求异常同样以 502 上报，body 保持既有 error 文案。"""
+    from helpers import user_id_of, set_config
+
+    set_config(user_id_of('farmer01'), weather_key='WK')
+
+    def _boom(*a, **k):
+        raise requests.ConnectionError('boom')
+
+    monkeypatch.setattr(requests, 'get', _boom)
+    resp = client.get('/api/forecast', headers=auth_headers)
+    assert resp.status_code == 502
+    got = resp.get_json()
+    assert got['code'] == 'ERR'
+    assert got['error'].startswith('天气接口请求失败:')
+
+
+def test_api_forecast_ok_status_is_200(client, auth_headers, monkeypatch):
+    """上游 code=200 时状态码必须是 200（前端只认 body.code === '200'）。"""
+    from helpers import user_id_of, set_config
+
+    set_config(user_id_of('farmer01'), weather_key='WK')
+    monkeypatch.setattr(requests, 'get', lambda *a, **k: _Resp(
+        {'code': '200', 'daily': []}))
+    resp = client.get('/api/forecast', headers=auth_headers)
+    assert resp.status_code == 200
+    assert resp.get_json()['code'] == '200'
 
 
 def test_api_reverse_geocode_requires_login(client):

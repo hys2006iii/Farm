@@ -92,6 +92,8 @@ def fetch_forecast(domain: str, lng, lat, key: str) -> dict:
     """代理请求和风天气 7 日预报。
 
     返回: 上游 JSON（原样透传）；失败时返回 {'code': 'ERR', 'error': ...}。
+
+    失败结果只承载错误体，HTTP 状态码由路由层决定（见 `data_routes.api_forecast`）。
     """
     url = build_forecast_url(domain, lng, lat, key)
     try:
@@ -102,3 +104,8 @@ def fetch_forecast(domain: str, lng, lat, key: str) -> dict:
         return r.json()
     except Exception:
         return {'code': 'ERR', 'error': '天气接口非 JSON（HTTP %s）' % r.status_code}
+
+
+def forecast_failed(payload) -> bool:
+    """判断 `fetch_forecast()` 的返回值是否表示失败（供路由层选状态码）。"""
+    return not isinstance(payload, dict) or payload.get('code') == 'ERR'
