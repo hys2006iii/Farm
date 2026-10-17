@@ -12,6 +12,7 @@ Topic 约定（与华为云数据转发规则一致）：
 """
 
 import json
+import logging
 import queue
 import threading
 import time
@@ -19,6 +20,8 @@ import time
 import paho.mqtt.client as mqtt
 
 from qinghe import config, db
+
+_logger = logging.getLogger('qinghe.iot')
 
 # ============================================================
 # 一、连接注册表（加锁）
@@ -460,6 +463,22 @@ def on_mqtt_message(client, userdata, msg):
 # 五、连接与下发
 # ============================================================
 
+def _safe_iot_port(raw) -> int:
+    """把配置里的 iot_port 归一为合法端口，非法值回退默认并记 warning。
+
+    路由层已做同口径校验，但 `connect_huawei_iot` 也会被 `api_app_login`、
+    定时重连等路径直接调用；历史脏数据（如 `'abc'`）不应让 MQTT 线程抛
+    `ValueError` 崩掉。
+    """
+    try:
+        port = int(str(raw).strip()) if raw is not None and str(raw).strip() else config.IOT_PORT_DEFAULT
+    except (TypeError, ValueError):
+        port = config.IOT_PORT_DEFAULT
+    if not (config.IOT_PORT_MIN <= port <= config.IOT_PORT_MAX):
+        _logger.warning('iot_port 非法（%r），回退默认端口 %s', raw, config.IOT_PORT_DEFAULT)
+        return config.IOT_PORT_DEFAULT
+    return port
+
 
 def connect_huawei_iot(uid) -> bool:
     """按用户配置连上华为云 IoTDA。
@@ -471,7 +490,7 @@ def connect_huawei_iot(uid) -> bool:
     if not cfg:
         return False
     host = cfg['iot_host'] or ''
-    port = int(cfg['iot_port'] or config.IOT_PORT_DEFAULT)
+    port = _safe_iot_port(cfg['iot_port'])
     client_id = cfg['iot_client_id'] or ''
     user = cfg['iot_user'] or ''
     pw = cfg['iot_pass'] or ''
