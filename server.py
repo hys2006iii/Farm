@@ -168,9 +168,13 @@ def list_lan_ips(candidates=None) -> list:
 def load_app():
     """加载 Flask 应用与 SocketIO 实例。
 
-    优先使用重构后的应用工厂 ``qinghe.create_app()``（返回 ``(app, socketio)``），
-    失败则回退到重构前的 ``app.py`` 模块级单例。返回 ``(app, socketio, init_hooks)``，
-    其中 ``init_hooks`` 是需要在启动前调用的初始化函数列表。
+    优先使用应用工厂 ``qinghe.create_app()``（返回 ``(app, socketio)``）；
+    失败则回退到 ``app.py`` 的模块级 ``app`` / ``socketio`` 单例。
+    返回 ``(app, socketio, init_hooks)``，``init_hooks`` 为启动前需调用的初始化函数列表。
+
+    注意：两种路径都**不需要**外部再调用 ``init_db`` / ``init_geo_cache``——
+    ``create_app()`` 内部已完成（幂等），而 ``app.py`` 本身也是调用 ``create_app()`` 得到的。
+    因此 ``init_hooks`` 恒为空列表，保留该返回值只是为了向后兼容。
     """
     try:
         from qinghe import create_app  # type: ignore
@@ -182,29 +186,18 @@ def load_app():
             app = result
             from qinghe import socketio  # type: ignore
 
-        hooks = []
-        try:
-            from qinghe.db import init_db  # type: ignore
-
-            hooks.append(init_db)
-        except Exception:  # pragma: no cover - 初始化钩子缺失不致命
-            pass
-        try:
-            from qinghe.weather import init_geo_cache  # type: ignore
-
-            hooks.append(init_geo_cache)
-        except Exception:  # pragma: no cover
-            pass
-        print("[启动] 已加载 qinghe 应用工厂 create_app()")
-        return app, socketio, hooks
-    except Exception as exc:  # noqa: BLE001 - 回退到单文件版本
+        print("[启动] 已加载 qinghe 应用工厂 create_app()（存储已由工厂初始化）")
+        return app, socketio, []
+    except Exception as exc:  # noqa: BLE001 - 回退到单文件入口
         if not isinstance(exc, ImportError):
             print(f"[警告] qinghe 应用工厂加载失败（{exc}），回退到 app.py")
 
-    from app import app, socketio, init_db, init_geo_cache  # type: ignore
+    # app.py 只导出 app / socketio 两个对象（其内部同样调用 create_app()），
+    # 这里不要导入 init_db / init_geo_cache，否则回退路径必抛 ImportError。
+    from app import app, socketio  # type: ignore
 
-    print("[启动] 已加载 app.py 单文件应用")
-    return app, socketio, [init_db, init_geo_cache]
+    print("[启动] 已加载 app.py 应用入口")
+    return app, socketio, []
 
 
 def run_init_hooks(hooks) -> None:
