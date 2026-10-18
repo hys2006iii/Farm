@@ -47,7 +47,7 @@ body.login-page {
     overflow: hidden;
     background: #1B2B24;
     color: #E9E4D2;
-    padding: 46px 48px 40px;
+    padding: 52px 48px 44px;
     display: flex;
     flex-direction: column;
 }
@@ -82,55 +82,87 @@ body.login-page {
     color: #8E9C8C;
 }
 
-/* 水尺：0—300 mm，水面停在 150 mm */
+/* 水尺：0—300 mm，水面停在 150 mm。
+   高度用 vh 让标尺随视口生长（360~560px），窗口再高也不会留出大片空白。 */
+.gauge-wrap {
+    display: flex;
+    align-items: stretch;
+    gap: 22px;
+    margin: 44px 0 0;
+    max-width: 360px;
+}
 .gauge {
     position: relative;
-    width: 240px; height: 208px;
-    margin: 46px 0 0 6px;
+    flex: 1 1 auto;
+    width: auto; max-width: 236px;
+    height: clamp(360px, 50vh, 560px);
     border-left: 1px solid rgba(233, 228, 210, 0.12);
 }
+/* 主刻度每 50 mm 一道（10 等分），次刻度每 10 mm 一道 */
 .gauge-ticks {
-    position: absolute; left: 64px; top: 0; bottom: 0; width: 32px;
+    position: absolute; left: 84px; top: 0; bottom: 0; width: 48px;
     border-left: 1px solid rgba(233, 228, 210, 0.42);
     background-image:
-        repeating-linear-gradient(to top, rgba(233, 228, 210, 0.5) 0 1px, rgba(233, 228, 210, 0) 1px 35px),
-        repeating-linear-gradient(to top, rgba(233, 228, 210, 0.14) 0 1px, rgba(233, 228, 210, 0) 1px 7px);
+        repeating-linear-gradient(to top, rgba(233, 228, 210, 0.5) 0 1px, rgba(233, 228, 210, 0) 1px 10%),
+        repeating-linear-gradient(to top, rgba(233, 228, 210, 0.14) 0 1px, rgba(233, 228, 210, 0) 1px 2%);
 }
+/* 水面：150/300 = 50%，随标尺等比缩放，始终对齐 150 mm 读数线 */
 .gauge-water {
-    position: absolute; left: 64px; bottom: 0; width: 32px; height: 50%;
+    position: absolute; left: 84px; bottom: 0; width: 48px; height: 50%;
     background: linear-gradient(to top, rgba(63, 125, 95, 0.62), rgba(63, 125, 95, 0.16));
 }
 .gauge-line {
-    position: absolute; left: 50px; bottom: 50%; width: 62px;
+    position: absolute; left: 68px; bottom: 50%; width: 78px;
     border-top: 1px solid var(--gold-soft);
 }
 .gauge-line span {
-    position: absolute; right: 100%; top: -8px; margin-right: 10px;
-    font-family: var(--font-num); font-size: 10.5px; letter-spacing: 0.08em;
+    position: absolute; right: 100%; top: -9px; margin-right: 12px;
+    font-family: var(--font-num); font-size: 13px; letter-spacing: 0.08em;
     color: #D8C99B; white-space: nowrap;
 }
 .gauge-labels {
-    position: absolute; left: 0; top: 0; bottom: 0; width: 50px;
+    position: absolute; left: 0; top: 0; bottom: 0; width: 68px;
     display: flex; flex-direction: column; justify-content: space-between;
     text-align: right;
-    font-family: var(--font-num); font-size: 10px; letter-spacing: 0.04em;
-    color: #7F8D7E;
+    font-family: var(--font-num); font-size: 12px; letter-spacing: 0.04em;
+    color: #8E9C8C;
 }
+/* 标尺旁的一列刻度读数：纯静态示意，标注量程含义而非实时数据 */
+.gauge-read {
+    flex: 0 0 auto;
+    display: flex; flex-direction: column; justify-content: space-between;
+    padding: 2px 0;
+}
+.gauge-read-title {
+    font-size: 9.5px; letter-spacing: 0.24em; color: #6F7D6E;
+}
+.gauge-read-row {
+    display: flex; align-items: baseline; gap: 8px;
+    font-family: var(--font-num);
+    font-size: 10.5px; letter-spacing: 0.06em; color: #9AA79A;
+}
+.gauge-read-row b { font-size: 12px; font-weight: 500; color: #C6CDBB; }
+.gauge-read-row i { font-style: normal; font-size: 9.5px; color: #6F7D6E; }
+
 .gauge-caption {
-    margin-top: 14px;
-    font-size: 10px; letter-spacing: 0.18em; color: #78866F;
+    margin-top: 16px;
+    font-size: 11px; letter-spacing: 0.2em; color: #8B9A85;
+}
+.gauge-note {
+    margin-top: 6px;
+    font-size: 9.5px; letter-spacing: 0.16em; color: #66735F;
 }
 
 .brand-verse {
     margin-top: auto;
     padding-top: 34px;
     font-family: var(--font-serif);
-    font-size: 16.5px; line-height: 2.05; letter-spacing: 0.1em;
+    font-size: 18px; line-height: 2.05; letter-spacing: 0.1em;
     color: #D9D2BB;
 }
 
 .brand-foot {
-    margin-top: 30px; padding-top: 16px;
+    margin-top: 30px; padding-top: 18px;
     border-top: 1px solid rgba(233, 228, 210, 0.1);
     font-size: 10.5px; line-height: 1.9; letter-spacing: 0.1em;
     color: #7E8C7D;
@@ -336,11 +368,22 @@ body.login-page {
 .farm-chooser .login-extra { margin-top: 16px; }
 
 /* ===== 响应式 ===== */
+/* 矮窗口（笔记本 768~800px 高）：收紧纵向节奏，标尺仍有 360px 可读高度 */
+@media (max-height: 860px) and (min-width: 901px) {
+    .brand-panel { padding: 36px 44px 32px; }
+    .brand-name { font-size: 30px; }
+    .gauge-wrap { margin-top: 30px; }
+    .brand-verse { font-size: 16.5px; line-height: 1.95; padding-top: 24px; }
+    .brand-foot { margin-top: 20px; padding-top: 14px; }
+    .brand-seal { right: 34px; bottom: 32px; width: 52px; height: 52px; font-size: 13.5px; }
+}
+
 @media (max-width: 900px) {
     .login-shell { grid-template-columns: 1fr; }
     .brand-panel { padding: 26px 24px 24px; }
     .brand-name { font-size: 26px; }
-    .gauge, .brand-verse, .brand-seal { display: none; }
+    .gauge-wrap, .gauge-caption, .gauge-note,
+    .brand-verse, .brand-seal { display: none; }
     .brand-foot { margin-top: 18px; padding-top: 12px; }
     .form-panel { padding: 34px 20px 30px; justify-content: flex-start; }
     .login-card { padding: 32px 24px 26px; }

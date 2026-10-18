@@ -26,15 +26,26 @@
             </div>
         </div>
 
-        <div class="gauge" aria-hidden="true">
-            <div class="gauge-water"></div>
-            <div class="gauge-line"><span>150 mm</span></div>
-            <div class="gauge-ticks"></div>
-            <div class="gauge-labels">
-                <span>300</span><span>200</span><span>100</span><span>0</span>
+        <!-- 水尺标尺：纯静态示意，读数固定停在 150 mm，不代表实时水位 -->
+        <div class="gauge-wrap">
+            <div class="gauge" aria-hidden="true">
+                <div class="gauge-water"></div>
+                <div class="gauge-line"><span>150 mm</span></div>
+                <div class="gauge-ticks"></div>
+                <div class="gauge-labels">
+                    <span>300</span><span>200</span><span>100</span><span>0</span>
+                </div>
+            </div>
+            <div class="gauge-read" aria-hidden="true">
+                <span class="gauge-read-title">标尺读数</span>
+                <span class="gauge-read-row"><b>300</b><i>上限</i></span>
+                <span class="gauge-read-row"><b>200</b><i>适灌</i></span>
+                <span class="gauge-read-row"><b>100</b><i>下限</i></span>
+                <span class="gauge-read-row"><b>0</b><i>渠底</i></span>
             </div>
         </div>
         <p class="gauge-caption">渠道水位标尺 · 0—300 mm</p>
+        <p class="gauge-note">图示为标尺示意，非实时水位</p>
 
         <p class="brand-verse">田面有水，根区有氧；<br>雨在未来六日，水在此刻一渠。</p>
 
