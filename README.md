@@ -79,6 +79,19 @@
 （headless Edge + CDP）把「渲染成什么样」也纳入验收：17 项断言覆盖尺寸、对齐、
 溢出、分组、降级与窄屏单列。
 
+### 6. 第五轮（外部接入自检与站内弹窗）
+
+| 编号 | 项 | 要点 |
+| --- | --- | --- |
+| I1 | 外部接入连通性自检 | 新增 `qinghe/diag.py` 与 `POST /api/diag/<target>`（iot / weather / ai / webhook）：纯探测，不写库、不重连、不落告警；未配置时直接给「未填写」结论而不真的发请求；未知目标 400 |
+| I2 | 设置页「测试连接」 | 物联网接入 / 气象与降雨预测 / AI 助手三块各加「测试连接」，告警推送加「推送测试消息」；按钮与结果小字同排，成功墨绿、失败朱红；请求期间禁用按钮挡住连点 |
+| I3 | 站内弹窗 | 新增 `#qhDialog` 模态替代浏览器原生 `alert`/`confirm`/`prompt`：原生弹窗会阻塞渲染线程（弹着时 socket 与图表全停）、样式割裂、标题栏带站点地址。支持 X / 取消 / 确认 / Esc / 点遮罩关闭，prompt 支持回车确认 |
+| I4 | 登录页站内提示条 | 登录页不加载 `core.js`，自带最小实现 `notice()`：卡片上方内联提示条、自动收起、校验失败走朱红；原生 `alert` 调用清零 |
+| I5 | 部署脚本可维护性 | 四个 `.bat` 统一为 GBK 无 BOM + CRLF（cmd.exe 要求 CRLF，裸 LF 会让解析器错位报「不是内部或外部命令」）；新增 `.gitattributes` 锁死行尾；新增 `tools/check_bat.py` 静态体检并交给真实 cmd.exe 解析 |
+
+第六批新增 1 个路径（`/api/diag/<target>`）与 1 个模块（`qinghe/diag.py`），
+`tools/visual_check.py` 的断言增至 18 项（新增测试按钮样式命中、站内弹窗开关）。
+
 
 ---
 
@@ -94,7 +107,8 @@
 │  qinghe/{auth,iot,irrigation,alerts,weather,ai}│
 │  qinghe/{alert_center,logbook,heartbeat,       │
 │          planner,metrics,autocontrol} 新模块   │
-│  qinghe/{farm,advice,simulate} 地块/建议/模拟  │
+│  qinghe/{farm,advice,simulate,diag} 地块/建议/ │
+│          模拟库/接入自检                       │
 │  qinghe/db.py  SQLite（WAL、参数化、连接池化） │
 └───────────────────────────────────────────────┘
         │ MQTT（paho-mqtt 后台线程）
@@ -105,8 +119,8 @@ ESP32-E 节点（D7/D9 水泵、D5 气泵 PWM、A0 水位、A2 土壤、A4 DO、
 ```
 
 - 后端按模块拆包，`app.py` 只剩装配入口（约 20 行）。
-- 前端拆分为 `static/js/{core,store,charts,irrigation,config,ai,weather,realtime,insight,advice,farm,app}.js`
-  与 `static/css/{base,dashboard,login,modal,insight,knowledge}.css`，`templates/index.html` 从 1616 行降到约 560 行。
+- 前端拆分为 `static/js/{core,store,charts,irrigation,config,ai,weather,realtime,insight,advice,diag,farm,app}.js`
+  与 `static/css/{base,dashboard,login,modal,insight,knowledge}.css`，`templates/index.html` 从 1616 行降到约 620 行。
 - 遥测回调线程内做「心跳 → 上下文 → 泵时长 → 自动调控 → 告警判定」旁路，每个子系统独立 try/except，
   任一失败不影响主链路落库与推送。
 
@@ -162,19 +176,20 @@ python server.py                    # 或 start_server.bat
 ## 四、测试
 
 ```bash
-python -m pytest tests -q           # Python 侧全量（当前 876 passed）
-npm run test:js                     # 前端纯函数（node --test，需 Node 18+，当前 133 passed）
-python tools/visual_check.py        # 浏览器验收（headless Edge + CDP，17 项，需 websocket-client）
+python -m pytest tests -q           # Python 侧全量（当前 939 passed）
+npm run test:js                     # 前端纯函数（node --test，需 Node 18+，当前 144 passed）
+python tools/visual_check.py        # 浏览器验收（headless Edge + CDP，18 项，需 websocket-client）
+python tools/check_bat.py           # 部署脚本体检（编码 / 行尾 / 真实 cmd.exe 解析）
 ```
 
 - Python 用例覆盖：鉴权与限流、配置读写、遥测解析与落库、RORI 与动态阈值、告警判定与推送、
   告警批量确认、预案状态机、自动调控、指标核算、CSV 导出、SocketIO 事件、多地块、七日建议、
-  外部灌数通道、重复消息冷却、AI 快照、知识库页面、部署脚本静态检查。
+  外部灌数通道、重复消息冷却、AI 快照、知识库页面、外部接入自检、部署脚本静态检查。
 - 前端用例抽出纯函数（`computeRori`、分级、动态阈值、圈地面积、双滑杆几何、告警与日志指纹、
-  数据新鲜度、阈值预设）做无浏览器测试。
+  数据新鲜度、阈值预设、测试连接按钮）做无浏览器测试。
 - `visual_check.py` 负责「渲染成什么样」：起 waitress + 临时库，断言水尺尺寸、泵卡顺序、
   两列卡片底边齐平、滑杆区间高亮、日志卡未塌陷、无横向溢出、设置分组与字段齐全、
-  地图降级提示、窄屏单列，并把各页截图写到 `docs/_shots/`。
+  测试按钮样式命中、站内弹窗开关、地图降级提示、窄屏单列，并把各页截图写到 `docs/_shots/`。
 - 交付验收命令（AGENTS.md）：`python -m pytest tests -q` 必须全绿。
 
 ### 没有实物主板时怎么验
@@ -224,7 +239,8 @@ Farm/
 ├─ static/                # css/ + js/ 前端资源
 ├─ tests/                 # pytest 用例 + js/ 前端用例
 ├─ docs/                  # 设计文档与交付材料
-├─ tools/                 # gen_secret.py / simulate_device.py / selftest_no_hardware.py
+├─ tools/                 # gen_secret / simulate_device / selftest_no_hardware
+│                         # visual_check（浏览器验收）/ check_bat（脚本体检）
 └─ *.bat                  # run/start_server/stop_server/firewall_allow 运维脚本
 ```
 
