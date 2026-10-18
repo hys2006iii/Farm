@@ -54,6 +54,16 @@
 第二批新增 9 个路径（`/api/farms` ×5、`/api/advice/calendar`、`/api/dev/*` ×2、`/api/telemetry`、`/knowledge`），
 `/api/dev/*` 需以 `FARM_DEV_SIM=1` 启动才开放，生产环境默认关闭（404）。
 
+### 4. 第三轮加固（稳定性、安全与离线可用）
+
+| 编号 | 项 | 要点 |
+| --- | --- | --- |
+| G1 | 遥测历史按地块隔离 | `sensor_history` 增 `farm_id`（幂等迁移 + 按当前地块回填），历史、图表、节水核算、CSV 导出都只看当前地块；未归属旧数据仍可见 |
+| G2 | 入参统一校验 | 非对象 JSON 体、`farm_id` 超出安全区间、配置字段类型/长度/经纬度非法一律 400，不再 500 |
+| G3 | 接口安全加固 | AI / Webhook 地址拒绝回环、私网与云元数据（防 SSRF）；注册限流；改密清会话；请求体上限 512 KB，400/413/415 返回 JSON；Cookie `HttpOnly`+`SameSite=Lax`；Socket.IO 仅同源 |
+| G4 | 离线可用 | Chart.js / Leaflet / Socket.IO 全部本地化到 `static/vendor/`，CSP 收紧为只信任同源；校园网屏蔽 CDN 时图表与地图不再静默失效；三页声明站点图标消除 404 |
+| G5 | 无遥测不臆测 | 未收到遥测时 `/api/telemetry` 读数为 `null`、七日建议不再按默认 0 值给出「维持即可」；看板与 AI 快照如实标注「暂无」 |
+
 
 ---
 
@@ -138,8 +148,8 @@ python server.py                    # 或 start_server.bat
 ## 四、测试
 
 ```bash
-python -m pytest tests -q           # Python 侧全量（当前 770 passed）
-npm run test:js                     # 前端纯函数（node --test，需 Node 18+，当前 82 passed）
+python -m pytest tests -q           # Python 侧全量（当前 832 passed）
+npm run test:js                     # 前端纯函数（node --test，需 Node 18+，当前 92 passed）
 ```
 
 - Python 用例覆盖：鉴权与限流、配置读写、遥测解析与落库、RORI 与动态阈值、告警判定与推送、
