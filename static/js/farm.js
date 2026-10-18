@@ -26,6 +26,8 @@
         map: null,
         marker: null,
         polygon: null,
+        // 顶点圆点的图层引用，drawPolygon 重画前先整批回收（否则撤回/清空后点仍留在图上）
+        pointMarkers: [],
         polyPoints: [],
         // 撤回/回退栈：撤回与清空都把点推到这里，「回退」再取回。
         // 只存一份即够——圈地时每加一个点就清空它（见 addPolyPoint）。
@@ -245,20 +247,46 @@
         QH.toast('已取该点坐标，可点「保存地块信息」写入', 'success');
     }
 
+    /** 同步「撤回 / 回退」按钮可用态：栈空时置灰并改 title 提示 */
+    function syncHistoryButtons() {
+        var undo = QH.$('mapUndoBtn');
+        var redo = QH.$('mapRedoBtn');
+        if (undo) {
+            undo.disabled = !state.polyPoints.length;
+            undo.title = state.polyPoints.length
+                ? '撤回上一点（还有 ' + state.polyPoints.length + ' 点）' : '没有可撤回的边界点';
+        }
+        if (redo) {
+            redo.disabled = !state.redoPoints.length;
+            redo.title = state.redoPoints.length
+                ? '回退刚撤回的点（还有 ' + state.redoPoints.length + ' 个可回退）' : '没有可回退的点';
+        }
+    }
+
     function drawPolygon() {
+        syncHistoryButtons();
         if (!state.map || !root.L) return;
         if (state.polygon) {
             state.map.removeLayer(state.polygon);
             state.polygon = null;
         }
+        // 顶点的圆点也必须整批撤掉再重画。原先只删多边形、不删圆点，于是
+        // 「撤回 / 回退 / 清空」之后线没了、点还钉在地图上——正是用户报的
+        // 「点还在，只是删掉了线」。这里统一按 state.pointMarkers 回收。
+        if (state.pointMarkers && state.pointMarkers.length) {
+            state.pointMarkers.forEach(function (m) { state.map.removeLayer(m); });
+        }
+        state.pointMarkers = [];
         if (state.polyPoints.length >= 2) {
             state.polygon = root.L.polygon(state.polyPoints, {
                 color: '#2C5F4A', weight: 2, fillColor: '#2C5F4A', fillOpacity: 0.12
             }).addTo(state.map);
         }
         state.polyPoints.forEach(function (p) {
-            root.L.circleMarker(p, { radius: 4, color: '#A8402F', weight: 2, fillColor: '#FBF9F3', fillOpacity: 1 })
-                .addTo(state.map);
+            var dot = root.L.circleMarker(p, {
+                radius: 4, color: '#A8402F', weight: 2, fillColor: '#FBF9F3', fillOpacity: 1
+            }).addTo(state.map);
+            state.pointMarkers.push(dot);
         });
     }
 
