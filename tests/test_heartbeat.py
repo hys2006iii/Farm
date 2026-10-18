@@ -42,10 +42,14 @@ def _heartbeat_isolation(flask_app, monkeypatch):
                         lambda *args, **kwargs: True)
     alert_center._ensure_schema()
     alert_center._reset_dedupe()
+    # 日志/告警的内容冷却表是进程级全局：本文件多个用例写同形正文
+    # （「首次心跳」「设备离线」…），不清掉会让后一个用例的写入被前一个挡下。
+    logbook.reset_recent_logs()
     yield
     heartbeat.stop_watcher()
     _join_push_threads()
     alert_center._reset_dedupe()
+    logbook.reset_recent_logs()
 
 
 def test_watcher_not_started_by_default(flask_app):

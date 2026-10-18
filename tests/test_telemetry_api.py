@@ -15,14 +15,27 @@ from qinghe import planner
 
 @pytest.fixture(autouse=True)
 def _reset_planner_cache(flask_app):
-    """planner 的遥测缓存是模块级字典，用例之间必须清掉。"""
-    from qinghe import db
+    """planner 的遥测缓存是模块级字典，用例之间必须清掉。
 
-    with db.get_db() as conn:
-        rows = conn.execute('SELECT id FROM users').fetchall()
-    for row in rows:
-        planner.reset_telemetry(int(row[0]))
+    同时停掉可能残留的设备巡检线程：它属于**上一个用例**（上一份临时库），
+    却会按周期扫描 `device_status` 表并把本用例刚写入的遥测判成「设备离线」，
+    进而清空 planner 缓存 —— 表现为 `has_telemetry` 假阳/假阴与读数被覆盖，
+    而且只在全量跑（用例顺序靠后）时才复现。
+    """
+    from qinghe import db, heartbeat
+
+    heartbeat.stop_watcher()
+
+    def _clear():
+        with db.get_db() as conn:
+            rows = conn.execute('SELECT id FROM users').fetchall()
+        for row in rows:
+            planner.reset_telemetry(int(row[0]))
+
+    _clear()
     yield
+    heartbeat.stop_watcher()
+    _clear()
 
 
 @pytest.fixture()
@@ -46,9 +59,12 @@ def test_telemetry_requires_login(client):
 
 def test_telemetry_empty_before_any_report(logged_client):
     """还没上报过时返回 has_telemetry=False，不伪造 0 读数。"""
+    from helpers import user_id_of
+
     body = logged_client.get('/api/telemetry').get_json()
     assert body['status'] == 'success'
-    assert body['has_telemetry'] is False
+    assert body['has_telemetry'] is False, 'uid=%s 缓存=%r' % (
+        user_id_of('farmer01'), planner._latest.get(user_id_of('farmer01')))
     assert 'water_adc' not in body
     assert 'soil_adc' not in body
 

@@ -23,6 +23,32 @@ from helpers import login_session
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+@pytest.fixture(autouse=True)
+def _clean_external_state(flask_app):
+    """本文件会真的往库里灌遥测，必须清掉跨用例的进程级缓存。
+
+    `planner._latest` 与 `logbook`/`alert_center` 的冷却表都是模块级全局：
+    灌数会写进 planner 缓存，而缓存按 **uid** 索引、与临时库无关，
+    于是下一个用例（哪怕换了新库）仍会读到上一个用例的遥测，
+    典型表现是 `/api/telemetry` 的 `has_telemetry` 假阳。
+    """
+    from qinghe import alert_center, logbook, planner
+
+    def _clear():
+        from qinghe.db import get_db
+
+        with get_db() as conn:
+            rows = conn.execute('SELECT id FROM users').fetchall()
+        for row in rows:
+            planner.reset_telemetry(int(row[0]))
+        logbook.reset_recent_logs()
+        alert_center._reset_dedupe()
+
+    _clear()
+    yield
+    _clear()
+
+
 def _load_tool():
     """动态加载 tools/simulate_device.py（tools 不是包，没有 __init__.py）。"""
     path = os.path.join(PROJECT_ROOT, 'tools', 'simulate_device.py')
