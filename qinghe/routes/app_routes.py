@@ -6,7 +6,7 @@
 
 from flask import Blueprint, jsonify, redirect, render_template, request, session, url_for
 
-from qinghe import auth, iot
+from qinghe import auth, iot, validators
 from qinghe.iot import PROP_MAP
 
 bp = Blueprint('app_api', __name__)
@@ -40,11 +40,17 @@ def route_knowledge():
 @auth.require_token
 def api_app_command(uid):
     """App 端下发控制指令（JWT 鉴权）。"""
-    payload = request.json or {}
+    try:
+        payload = validators.get_json_object(request)
+    except validators.ValidationError as exc:
+        return jsonify({'status': 'error', 'message': exc.message}), exc.status
     prop = PROP_MAP.get(payload.get('device'))
     if not prop:
         return jsonify({'status': 'error', 'message': '未知设备'}), 400
     action = payload.get('action')
+    # 只接受 on/off：旧版把任意值都当 off，容易把拼写错误当成功下发
+    if action not in ('on', 'off'):
+        return jsonify({'status': 'error', 'message': 'action 仅支持 on / off'}), 400
     ok = iot.send_property_command(uid, {prop: 'on' if action == 'on' else 'off'})
     if not ok:
         return jsonify({'status': 'error', 'message': '设备未连接'})

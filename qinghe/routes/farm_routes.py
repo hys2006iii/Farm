@@ -28,6 +28,30 @@ def _fail(message, status=400):
     return jsonify({'status': 'error', 'message': message}), status
 
 
+def _json_body():
+    """解析 JSON 对象请求体。
+
+    合法 JSON 但不是对象（字符串/数字/数组）时返回 (None, 400 响应)，
+    避免下游 `data.get(...)` 抛 AttributeError → 500。
+    """
+    try:
+        return validators.get_json_object(request), None
+    except validators.ValidationError as exc:
+        return None, _fail(exc.message, exc.status)
+
+
+def _farm_id(data):
+    """取并校验 farm_id：接受数字或数字字符串，必须在安全区间内。"""
+    farm_id = validators.as_int(data, 'farm_id')
+    if farm_id is None:
+        return None
+    if not (validators.FARM_ID_MIN <= farm_id <= validators.FARM_ID_MAX):
+        raise validators.ValidationError(
+            'farm_id 需在 %d~%d 之间' % (validators.FARM_ID_MIN, validators.FARM_ID_MAX)
+        )
+    return farm_id
+
+
 def _validate_name(data):
     """校验地块名称：1–20 字符。"""
     name = validators.as_stripped(data, 'name')
@@ -128,7 +152,9 @@ def api_create_farm():
     uid = _current_uid()
     if uid is None:
         return _fail('未授权', 401)
-    data = request.json or {}
+    data, error = _json_body()
+    if error:
+        return error
     try:
         name = _validate_name(data)
         lat, lon = _validate_pair(
@@ -157,9 +183,11 @@ def api_switch_farm():
     uid = _current_uid()
     if uid is None:
         return _fail('未授权', 401)
-    data = request.json or {}
+    data, error = _json_body()
+    if error:
+        return error
     try:
-        farm_id = validators.as_int(data, 'farm_id')
+        farm_id = _farm_id(data)
     except validators.ValidationError as exc:
         return _fail(exc.message, exc.status)
     if farm_id is None:
@@ -187,9 +215,11 @@ def api_update_farm():
     uid = _current_uid()
     if uid is None:
         return _fail('未授权', 401)
-    data = request.json or {}
+    data, error = _json_body()
+    if error:
+        return error
     try:
-        farm_id = validators.as_int(data, 'farm_id')
+        farm_id = _farm_id(data)
     except validators.ValidationError as exc:
         return _fail(exc.message, exc.status)
     if not farm_id:
@@ -205,7 +235,8 @@ def api_update_farm():
             )
         else:
             lat, lon = farm['lat'], farm['lon']
-        area = _validate_area(data) if 'area_m2' in data else farm['area_m2']
+        area = (_validate_area(data) if data.get('area_m2') is not None
+                else farm['area_m2'])
         polygon = (_normalize_polygon(data.get('polygon'))
                    if 'polygon' in data else farm['polygon'])
     except validators.ValidationError as exc:
@@ -226,9 +257,11 @@ def api_delete_farm():
     uid = _current_uid()
     if uid is None:
         return _fail('未授权', 401)
-    data = request.json or {}
+    data, error = _json_body()
+    if error:
+        return error
     try:
-        farm_id = validators.as_int(data, 'farm_id')
+        farm_id = _farm_id(data)
     except validators.ValidationError as exc:
         return _fail(exc.message, exc.status)
     if not farm_id:

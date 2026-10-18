@@ -66,6 +66,8 @@ SECURITY_HEADERS = {
 
 LOGIN_MAX_FAIL = 5
 LOGIN_LOCK_SECONDS = 600
+REGISTER_MAX_ATTEMPTS = 10          #: 同一来源 IP 在限流窗口内最多注册次数
+MAX_CONTENT_LENGTH = 512 * 1024     #: 请求体上限（字节），超限返回 413
 
 # ============================================================
 # 四、配置项校验
@@ -104,10 +106,11 @@ DEFAULT_CMD_TOPIC = '/esp32e/cmd'
 DEFAULT_WEATHER_DOMAIN = 'm767cfpjh7.re.qweatherapi.com'
 DEFAULT_AI_DOMAIN = 'https://api.deepseek.com'
 DEFAULT_AI_MODEL = 'deepseek-chat'
+AI_MSG_MAX_LEN = 2000               #: 单次提问最大字符数（超长直接 400）
 
 #: 外部网络调用超时（秒）
 TIMEOUT_PHOTON = 6
-TIMEOUT_WEBHOOK = 6
+TIMEOUT_WEBHOOK = 3
 TIMEOUT_WEATHER = 8
 TIMEOUT_AI = 20
 

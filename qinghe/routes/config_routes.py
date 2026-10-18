@@ -1,15 +1,19 @@
 """青禾智灌 —— 配置与阈值 HTTP 接口。
 
 覆盖：/api/get_config、/api/save_config、/api/thresh_settings(GET/POST)。
-修复点：iot_port 类型/范围校验（非法值保留旧值）、阈值 int() 500 与 clamp、
-所有连接一律关闭。
+修复点：非 dict 请求体不再 500（统一 400）、配置字段严格类型/长度/范围校验、
+阈值与 manual_mode 严格校验、iot_port 类型/范围校验（非法值保留旧值）。
 """
 
 from flask import Blueprint, jsonify, request, session
 
-from qinghe import config, db, iot, irrigation
+from qinghe import config, db, irrigation, iot, validators
 
 bp = Blueprint('config_api', __name__)
+
+# 经纬度列的合法范围；与 farm_routes 共用同一套范围常量，避免两处校验漂移
+_COORD_FIELDS = {'farm_lat': config.FARM_LAT_RANGE, 'farm_lng': config.FARM_LON_RANGE}
+_WEBHOOK_URL_MAX_LEN = 500
 
 
 def _reconnect_async(uid):
@@ -62,6 +66,44 @@ def _to_float(value, default=None):
         return default
 
 
+# 配置里所有文本字段的长度上限；未列出的列不限制（如阈值走专门接口）
+_TEXT_FIELD_MAX = {
+    'farm_name': config.FARM_NAME_MAX_LEN,
+    'weather_domain': 200, 'ai_domain': 200, 'iot_host': 200,
+    'iot_client_id': 100, 'iot_user': 100, 'iot_pass': 200, 'iot_device_id': 100,
+    'iot_target_device_id': 100, 'iot_m2m_topic': 200, 'iot_cmd_topic': 200,
+    'weather_key': 200, 'ai_key': 200, 'webhook_url': _WEBHOOK_URL_MAX_LEN,
+    'pump_port': 20, 'air_pump_port': 20, 'water_sensor_port': 20, 'soil_sensor_port': 20,
+}
+_COORD_FIELD_NAMES = {'farm_lat': '纬度', 'farm_lng': '经度'}
+
+
+def _validate_text_fields(data, values):
+    """校验显式提交的文本字段（类型、长度、Webhook 前缀），合法值就地写回 values。"""
+    for key, max_len in _TEXT_FIELD_MAX.items():
+        if key not in data or data[key] is None or data[key] == config.MASK:
+            continue
+        text = validators.parse_str_field(data[key], key, max_len=max_len, strip=True)
+        if key == 'webhook_url' and text and not text.startswith(('http://', 'https://')):
+            raise validators.ValidationError('Webhook 地址必须以 http:// 或 https:// 开头')
+        values[key] = text
+
+
+def _validate_coords(data, values):
+    """校验显式提交的经纬度（数字或数字字符串）；非法值 400 而不是写脏数据。"""
+    for key, (low, high) in _COORD_FIELDS.items():
+        if key not in data or data[key] is None or data[key] == config.MASK:
+            continue
+        raw = data[key]
+        # 空字符串表示「清空坐标」，保留历史语义
+        if isinstance(raw, str) and not raw.strip():
+            values[key] = ''
+            continue
+        value = validators.parse_float_range(raw, low, high, _COORD_FIELD_NAMES[key])
+        # 字符串按原样（去空格）写回，数字统一保留 6 位小数
+        values[key] = raw.strip() if isinstance(raw, str) else round(value, 6)
+
+
 @bp.route('/api/get_config', methods=['GET'])
 def api_get_config():
     """读取当前用户配置；敏感凭据不回显明文，已设置则返回掩码占位。"""
@@ -71,7 +113,8 @@ def api_get_config():
     if not cfg:
         return jsonify({'error': '未找到配置'}), 404
     cfg = dict(cfg)
-    for key in ('iot_pass', 'weather_key', 'ai_key'):
+    # webhook_url 里常带钉钉机器人 access_token，与其它凭据一样不回显明文
+    for key in ('iot_pass', 'weather_key', 'ai_key', 'webhook_url'):
         if cfg.get(key):
             cfg[key] = config.MASK
     return jsonify(cfg)
@@ -87,7 +130,10 @@ def api_save_config():
     """
     if 'user_id' not in session:
         return jsonify({'error': '未授权'}), 401
-    data = request.json or {}
+    try:
+        data = validators.get_json_object(request)
+    except validators.ValidationError as exc:
+        return jsonify({'error': exc.message}), exc.status
     uid = session['user_id']
 
     old_row = db.load_config(uid)
@@ -100,6 +146,11 @@ def api_save_config():
         return v
 
     values = {col: val(col) for col in db.CONFIG_COLUMNS}
+    try:
+        _validate_text_fields(data, values)
+        _validate_coords(data, values)
+    except validators.ValidationError as exc:
+        return jsonify({'error': exc.message}), exc.status
 
     # iot_port：非数字/越界一律保留旧值（旧值非法则回退默认端口）
     port = _to_int(data.get('iot_port'))
@@ -146,7 +197,10 @@ def api_save_thresh():
     if 'user_id' not in session:
         return jsonify({'error': '未授权'}), 401
     uid = session['user_id']
-    data = request.json or {}
+    try:
+        data = validators.get_json_object(request)
+    except validators.ValidationError as exc:
+        return jsonify({'error': exc.message}), exc.status
 
     def pick(key, low, high):
         raw = data.get(key)
@@ -159,7 +213,11 @@ def api_save_thresh():
     humi_up = pick('humi_up', config.HUMI_MIN, config.HUMI_MAX)
     wl_down = pick('waterlevel_down', config.WATERLEVEL_MIN, config.WATERLEVEL_MAX)
     wl_up = pick('waterlevel_up', config.WATERLEVEL_MIN, config.WATERLEVEL_MAX)
-    manual = 1 if data.get('manual_mode') else 0
+    try:
+        manual = 1 if validators.parse_bool_strict(
+            data.get('manual_mode'), 'manual_mode', default=False) else 0
+    except validators.ValidationError as exc:
+        return jsonify({'error': exc.message}), exc.status
     # 基本约束：下限不超过上限
     humi_down = min(humi_down, humi_up)
     wl_down = min(wl_down, wl_up)

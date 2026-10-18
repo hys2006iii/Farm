@@ -8,7 +8,7 @@
 
 from flask import Blueprint, jsonify, request, session
 
-from qinghe import ai
+from qinghe import ai, config, validators
 
 bp = Blueprint('ai_api', __name__)
 
@@ -21,7 +21,13 @@ def api_ai_chat():
     if 'user_id' not in session:
         return jsonify({'error': '未授权访问'}), 401
     uid = session['user_id']
-    user_msg = (request.json or {}).get('message', '')
+    try:
+        data = validators.get_json_object(request)
+        user_msg = validators.as_str(data, 'message', '')
+    except validators.ValidationError as exc:
+        return jsonify({'error': exc.message}), exc.status
+    if len(user_msg) > config.AI_MSG_MAX_LEN:
+        return jsonify({'error': '提问过长，请控制在 %d 字以内' % config.AI_MSG_MAX_LEN}), 400
 
     # 取快照失败不影响问答：build_snapshot 内部已逐段兜底，返回空串即无上下文
     try:

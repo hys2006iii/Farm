@@ -5,6 +5,7 @@
 """
 
 import logging
+import os
 
 from flask import Flask, jsonify
 from flask_socketio import SocketIO
@@ -89,6 +90,19 @@ def _register_error_handlers(app: Flask) -> None:
     def _method_not_allowed(err):  # noqa: ARG001
         return jsonify({'error': '请求方法不允许'}), 405
 
+    # 解析失败 / 超限 / Content-Type 不符时也返回 JSON，而不是 Werkzeug 的 HTML 页
+    @app.errorhandler(400)
+    def _bad_request(err):  # noqa: ARG001
+        return jsonify({'error': '请求参数有误'}), 400
+
+    @app.errorhandler(413)
+    def _request_entity_too_large(err):  # noqa: ARG001
+        return jsonify({'error': '请求体过大'}), 413
+
+    @app.errorhandler(415)
+    def _unsupported_media_type(err):  # noqa: ARG001
+        return jsonify({'error': '请求体需为 JSON'}), 415
+
 
 def create_app(init_storage: bool = True) -> tuple:
     """应用工厂：装配并返回 `(app, socketio)`。
@@ -101,6 +115,15 @@ def create_app(init_storage: bool = True) -> tuple:
     """
     app = Flask(__name__, template_folder='../templates', static_folder='../static')
     app.secret_key = config.get_secret_key()
+    # 会话 Cookie 加固：HttpOnly 防 XSS 读取；SameSite=Lax 防跨站提交；
+    # Secure 只在显式开启（本地 http 调试 / 校园网 http 部署不能强制 Secure）
+    app.config.update(
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE='Lax',
+        MAX_CONTENT_LENGTH=config.MAX_CONTENT_LENGTH,
+    )
+    if os.environ.get('FARM_COOKIE_SECURE') == '1':
+        app.config['SESSION_COOKIE_SECURE'] = True
     _warn_default_secret()
 
     _register_security_headers(app)
@@ -111,7 +134,8 @@ def create_app(init_storage: bool = True) -> tuple:
         init_db()
         init_geo_cache()
 
-    socketio.init_app(app, cors_allowed_origins='*')
+    # 同源部署：不放开跨域，避免任意站点借用用户 Cookie 建 Socket 连接
+    socketio.init_app(app, cors_allowed_origins=None)
 
     # SocketIO 事件在此处导入并注册，避免与 iot 模块形成循环依赖
     from qinghe import realtime  # noqa: F401
