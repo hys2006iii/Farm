@@ -1,0 +1,29 @@
+# 行尾与编码约定
+#
+# 为什么需要这个文件：
+# 仓库原先没有任何行尾约束，而 Windows 的 cmd.exe **要求批处理文件用 CRLF**。
+# .bat 一旦以裸 LF 检出，cmd 解析器就会错位 —— 表现为把 rem 注释和 echo 文本
+# 当成命令去执行，满屏「不是内部或外部命令」。这类故障在 Linux/macOS 上完全
+# 看不出来，只有真正双击运行时才暴露，所以必须在这里钉死。
+#
+# 这些脚本正文是中文：本机 cmd 使用系统 ANSI 代码页（简体中文为 936/GBK），
+# 因此 .bat 一律以 GBK 存盘，脚本内不再需要 chcp 65001（切码页反而会让 cmd
+# 在文件内重新定位时错行）。
+
+# 批处理：标记为二进制，Git 不做任何行尾/编码转换，原样保存 GBK + CRLF。
+# 用 -text 而不是 eol=crlf，是因为这两个设置会互相打架（后写的生效），
+# 而这里真正要保证的是「字节一个都不许动」。
+*.bat -text -diff
+*.cmd -text -diff
+
+# 其余文本文件统一 LF
+*.py text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.txt text eol=lf
