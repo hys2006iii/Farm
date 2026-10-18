@@ -133,9 +133,16 @@ def export_history_csv():
             if columns:
                 selected = [name for name in ('ts', 'water_adc', 'soil_adc', 'do_mgl', 'eh_mv')
                             if name in columns]
-                sql = 'SELECT %s FROM sensor_history WHERE user_id = ? AND ts >= ?' \
-                      ' ORDER BY ts DESC LIMIT ?' % ', '.join(selected)
-                for row in conn.execute(sql, (int(uid), int(since_ts), int(limit))).fetchall():
+                where = 'user_id = ? AND ts >= ?'
+                params = [int(uid), int(since_ts)]
+                if 'farm_id' in columns:
+                    # 与 /api/history 一致：只导出当前地块 + 升级前未归属的行
+                    where += ' AND (farm_id = 0 OR farm_id = ?)'
+                    params.append(int(db.get_active_farm_id(uid)))
+                params.append(int(limit))
+                sql = 'SELECT %s FROM sensor_history WHERE %s ORDER BY ts DESC LIMIT ?' \
+                      % (', '.join(selected), where)
+                for row in conn.execute(sql, params).fetchall():
                     record = dict(zip(selected, row))
                     rows.append([
                         _fmt_ts(record.get('ts')),

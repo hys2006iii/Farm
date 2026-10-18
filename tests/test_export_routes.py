@@ -95,6 +95,27 @@ def test_history_export_isolated_between_users(logged_client, uid):
     assert '999' not in body
 
 
+def test_history_export_follows_active_farm(logged_client, uid):
+    """历史导出与 /api/history 一致：只导出当前地块与升级前未归属的行。"""
+    farm_a = logged_client.post('/api/farms', json={'name': '甲地块', 'lat': 23.1, 'lon': 113.2}) \
+        .get_json()['farm']['id']
+    farm_b = logged_client.post('/api/farms', json={'name': '乙地块', 'lat': 23.2, 'lon': 113.3}) \
+        .get_json()['farm']['id']
+    assert logged_client.post('/api/farms/switch', json={'farm_id': farm_a}).status_code == 200
+    db.insert_history_rows([(uid, 1750000500000, 321, 321, None, None, farm_a)])
+    db.insert_history_rows([(uid, 1750000600000, 654, 654, None, None, farm_b)])
+    db.insert_history_rows([(uid, 1750000700000, 777, 777, None, None)])  # 未归属，两块地都可见
+
+    body_a = '\n'.join(csv_lines(logged_client.get('/api/export/history.csv'))[1:])
+    assert '321' in body_a and '777' in body_a
+    assert '654' not in body_a
+
+    assert logged_client.post('/api/farms/switch', json={'farm_id': farm_b}).status_code == 200
+    body_b = '\n'.join(csv_lines(logged_client.get('/api/export/history.csv'))[1:])
+    assert '654' in body_b and '777' in body_b
+    assert '321' not in body_b
+
+
 def test_history_export_rejects_bad_limit(logged_client):
     """limit 非数字或非正数返回 400。"""
     assert logged_client.get('/api/export/history.csv?limit=abc').status_code == 400
