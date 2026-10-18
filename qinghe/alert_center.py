@@ -9,7 +9,9 @@
 所有函数在未配置 webhook / 无网络时也能正常返回，不向调用方抛异常。
 """
 
+import hashlib
 import logging
+import re
 import threading
 import time
 from contextlib import closing
@@ -142,9 +144,30 @@ def _clip_content(content) -> str:
     return str(content or '').strip()[:CONTENT_MAX_LEN]
 
 
+def normalize_alert_text(content) -> str:
+    """告警正文指纹：压缩空白 + 把数字抹成 `#`。
+
+    用于冷却去重：`土壤湿度过低 20.1% < 下限 40%` 与 `… 19.8% …`
+    是同一件事的两次采样，不应各算一条新告警。
+    """
+    text = re.sub(r'\s+', ' ', str(content or '').strip())
+    return re.sub(r'\d+(?:\.\d+)?', '#', text)
+
+
 def _dedupe_key(uid: int, code: str, content: str) -> str:
-    """冷却去重键：`(uid, code, content.strip())`。"""
-    return '%d|%s|%s' % (uid, code, content)
+    """冷却去重键：`(uid, code, 正文指纹)`。
+
+    键里**只放类型码 + 正文指纹**（正文里的数字被抹成 `#`），而不是正文全文。
+    原因：正文带着实时数值，水位/墒情在阈值附近抖动时正文会从
+    `… 29.8mm …` 变成 `… 30.1mm …`，按全文去重会**每次都算新告警**，
+    60 秒冷却形同虚设，极短时间内就能刷出一屏相似消息并反复推 webhook。
+    指纹保留正文是为了区分「同一类型码下的不同事实」，例如同属 `auto_action`
+    的「水泵开启」与「气泵开启」。
+    """
+    digest = hashlib.sha1(
+        normalize_alert_text(content).encode('utf-8', 'replace')
+    ).hexdigest()[:12]
+    return '%d|%s|%s' % (uid, code, digest)
 
 
 def _insert_alert(user_id: int, level: str, code: str, content: str) -> int:

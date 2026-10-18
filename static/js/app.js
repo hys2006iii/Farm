@@ -69,8 +69,44 @@
         return div;
     }
 
-    /** 追加一条运行日志（内存态 + 增量渲染 + 节流落盘） */
-    function addLog(msg, theme) {
+    /**
+     * 运行日志降噪：同一事实在冷却窗口内只保留第一条。
+     *
+     * 设备抖动或自动调控反复触发时，`[自动] 水位 29.8mm < 下限 30mm…` 这类
+     * 消息会在极短时间内刷满日志区。这里按「级别 + 归一化正文」做指纹：
+     * 正文里的数字统一抹成 `#`，所以 29.8mm / 30.1mm 视为同一条。
+     */
+    var LOG_COOLDOWN_MS = 30000;
+
+    /** 正文指纹：压空白 + 抹掉数字 */
+    function logFingerprint(msg) {
+        return String(msg === undefined || msg === null ? '' : msg)
+            .replace(/\s+/g, ' ')
+            .trim()
+            .replace(/\d+(?:\.\d+)?/g, '#')
+            .slice(0, 120);
+    }
+
+    /**
+     * 是否应当记录这条日志（纯函数，便于单测）。
+     * @param {string} msg 日志正文
+     * @param {number} now 当前毫秒时间戳
+     * @param {Object} table 冷却表（会被就地更新）
+     */
+    function shouldRecordLog(msg, now, table) {
+        var store = table || S.logCoolDown;
+        var key = logFingerprint(msg);
+        if (!key) return false;
+        var last = store[key];
+        if (last && now - last < LOG_COOLDOWN_MS) return false;
+        store[key] = now;
+        return true;
+    }
+
+    /** 追加一条运行日志（内存态 + 增量渲染 + 节流落盘；重复内容按冷却窗口抑制） */
+    function addLog(msg, theme, options) {
+        var opts = options || {};
+        if (opts.dedupe !== false && !shouldRecordLog(msg, Date.now())) return null;
         var item = STORE.pushLog(msg, theme);
         renderLogs();
         return item;
@@ -213,6 +249,9 @@
         renderLogs: renderLogs,
         renderAlerts: renderAlerts,
         addLog: addLog,
+        logFingerprint: logFingerprint,
+        shouldRecordLog: shouldRecordLog,
+        LOG_COOLDOWN_MS: LOG_COOLDOWN_MS,
         LOG_RENDER_MAX: LOG_RENDER_MAX,
         ALERT_RENDER_MAX: ALERT_RENDER_MAX
     };
@@ -221,4 +260,13 @@
     root.addLog = addLog;
     root.renderLogs = renderLogs;
     root.renderAlerts = renderAlerts;
+
+    // node 单测出口：浏览器下无 module，静默跳过
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = {
+            logFingerprint: logFingerprint,
+            shouldRecordLog: shouldRecordLog,
+            LOG_COOLDOWN_MS: LOG_COOLDOWN_MS
+        };
+    }
 })(typeof globalThis !== 'undefined' ? globalThis : this);

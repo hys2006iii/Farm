@@ -1,6 +1,7 @@
 """青禾智灌 —— NF2 运行日志服务端化。
 
 - `add_log()`：把日志写入模块级有界队列，调用方（MQTT / HTTP 线程）永不阻塞；
+  同一 `(用户, 级别, 来源, 正文)` 在冷却窗口内只保留第一条，抑制重复刷屏；
 - 后台守护线程每 1.0 秒或积攒 ≥20 条时用 `executemany` 批量落库；
 - `flush_logs()`：测试 / 退出时强制刷盘；
 - `query_logs()` / `prune_logs()`：按用户分页查询与过期清理。
@@ -10,6 +11,7 @@
 
 import logging
 import queue
+import re
 import threading
 import time
 from contextlib import closing
@@ -40,6 +42,9 @@ MESSAGE_MAX_LEN = 500
 #: 单次查询最大条数（分页上限）
 MAX_LIMIT = 1000
 
+#: 重复日志冷却表的容量上限（超出后按冷却时间清理过期键）
+_RECENT_MAX = 2000
+
 #: 建表一次性标记：记录已建表的数据库路径，临时库切换时重新建表
 _schema_ready = False
 _schema_path = None
@@ -47,6 +52,16 @@ _schema_lock = threading.Lock()
 
 #: 所有写入者共用一把库锁，保证 flush_logs() 能看到后台线程的在途写入
 _DB_LOCK = threading.Lock()
+
+#: 重复日志冷却表：`(uid, level, source, 正文指纹)` -> 上次放行时间（秒）
+_recent_logs = {}
+_recent_lock = threading.Lock()
+
+
+def reset_recent_logs() -> None:
+    """清空重复日志冷却表（测试隔离与运行期调参后调用）。"""
+    with _recent_lock:
+        _recent_logs.clear()
 
 
 def _ensure_schema() -> None:
@@ -265,26 +280,73 @@ class _LogWriter:
 _writer = _LogWriter()
 
 
+def _log_key(user_id: int, level: str, source: str, message: str) -> tuple:
+    """重复日志的判重键：同用户 + 同级别 + 同来源 + 正文指纹。
+
+    正文先归一化：去掉首尾空白、把连续空白压成一个空格，并抹掉正文里的数字
+    （`12.5 mm` 与 `12.6 mm` 视为同一件事）。这样「水位 29.8mm 偏低」连续刷屏
+    时只会留一条，而「水位偏低」与「水泵开启」这类不同事实仍各留一条。
+    """
+    normalized = re.sub(r'\s+', ' ', str(message or '').strip())
+    normalized = re.sub(r'\d+(?:\.\d+)?', '#', normalized)
+    return (user_id, level, source, normalized[:120])
+
+
+def _should_log(user_id: int, level: str, source: str, message: str,
+                cooldown: float) -> bool:
+    """是否应当放行这条日志（冷却期内重复内容返回 False）。
+
+    `cooldown <= 0` 表示关闭去重（测试与需要逐条留痕的场景）。
+    """
+    if cooldown <= 0:
+        return True
+    key = _log_key(user_id, level, source, message)
+    now = time.monotonic()
+    with _recent_lock:
+        last = _recent_logs.get(key)
+        if last is not None and now - last < cooldown:
+            return False
+        _recent_logs[key] = now
+        # 表本身也要有界，避免长跑进程里键无限增长
+        if len(_recent_logs) > _RECENT_MAX:
+            for stale in [k for k, ts in _recent_logs.items() if now - ts >= cooldown]:
+                _recent_logs.pop(stale, None)
+    return True
+
+
+def reset_recent_logs() -> None:
+    """清空重复日志冷却表（测试隔离与运行期调参后调用）。"""
+    with _recent_lock:
+        _recent_logs.clear()
+
+
 def add_log(uid: int, message: str, level: str = 'info',
-            source: str = 'system') -> None:
+            source: str = 'system', cooldown: float = None) -> bool:
     """非阻塞写入一条运行日志。
 
     队列满（默认 1000）时丢弃最旧一条并计数，绝不阻塞调用方，也不抛异常。
-    后台守护线程每 1.0 秒或积攒 ≥20 条时批量落库。
+
+    **降噪**：`(用户, 级别, 来源, 正文)` 相同的日志在
+    `config.LOG_COOLDOWN_SECONDS`（默认 30 秒）内只保留第一条，避免设备抖动
+    或自动调控反复触发时极短时间内刷出一屏相同/极其相似的消息。
+    需要逐条留痕的调用方可以传 `cooldown=0` 关闭去重。
+
+    返回: 是否真正入队（被冷却挡下返回 False）。
     """
     _ensure_schema()
     user_id = _as_int(uid, -1)
     if user_id <= 0:
-        return
-    item = (
-        user_id,
-        _now_ms(),
-        _normalize_level(level),
-        _normalize_source(source),
-        _clip_message(message),
-    )
+        return False
+    level_value = _normalize_level(level)
+    source_value = _normalize_source(source)
+    text = _clip_message(message)
+    window = config.LOG_COOLDOWN_SECONDS if cooldown is None else float(cooldown)
+    if not _should_log(user_id, level_value, source_value, text, window):
+        return False
+    item = (user_id, _now_ms(), level_value, source_value, text)
     _writer.enqueue(item)
     _writer.start()
+    return True
 
 
 def flush_logs(timeout: float = 2.0) -> None:

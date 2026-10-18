@@ -200,6 +200,50 @@
     }
 
     /* ---------------- 告警 ---------------- */
+    /**
+     * 告警降噪：把「同一条事实」的连续重复压成一条。
+     *
+     * 原实现按 `msg` 全文去重，而告警正文里带着实时数值（水位 29.8mm / 30.1mm），
+     * 阈值附近抖动时每条都算「新消息」，60 秒冷却形同虚设——极短时间内就会
+     * 刷出一屏相似告警并反复弹 toast。
+     *
+     * 现在把正文里的数字统一抹成 `#` 再作指纹，并叠加两道闸门：
+     *   1) 冷却窗口 `ALERT_COOLDOWN_MS`（同一指纹内只放行一次）；
+     *   2) 全局最小间隔 `ALERT_MIN_GAP_MS`（任何告警之间都要拉开，防连环刷屏）。
+     */
+    var ALERT_COOLDOWN_MS = 60000;   // 同一指纹 60s 内只报一次
+    var ALERT_MIN_GAP_MS = 3000;     // 任意两条告警之间至少间隔 3s
+
+    /** 正文归一化：压空白 + 抹掉数字，得到「同一件事」的指纹 */
+    function alertFingerprint(msg) {
+        return String(msg === undefined || msg === null ? '' : msg)
+            .replace(/\s+/g, ' ')
+            .trim()
+            .replace(/\d+(?:\.\d+)?/g, '#')
+            .slice(0, 120);
+    }
+
+    /**
+     * 是否应当把这条告警呈现给用户。
+     *
+     * 纯函数式地读写传入的冷却表，便于单测；返回 false 表示本次被抑制。
+     * @param {string} msg 告警正文
+     * @param {number} now 当前毫秒时间戳
+     * @param {Object} table 冷却表（会被就地更新）
+     */
+    function shouldEmitAlert(msg, now, table) {
+        var store = table || S.alertCoolDown;
+        var key = alertFingerprint(msg);
+        if (!key) return false;
+        var lastSame = store[key];
+        if (lastSame && now - lastSame < ALERT_COOLDOWN_MS) return false;
+        var lastAny = store.__last || 0;
+        if (lastAny && now - lastAny < ALERT_MIN_GAP_MS) return false;
+        store[key] = now;
+        store.__last = now;
+        return true;
+    }
+
     /** 阈值越限与告警检测（统一 tick 5s 一次） */
     function checkAlerts() {
         if (!S.deviceOnline) return;
@@ -233,9 +277,7 @@
         else if (rori >= 40) items.push({ level: 'warn', msg: 'RORI ' + rori.toFixed(0) + ' 中度缺氧，脉冲加气' });
 
         items.forEach(function (it) {
-            var key = it.msg;
-            if (S.alertCoolDown[key] && now - S.alertCoolDown[key] < 60000) return;
-            S.alertCoolDown[key] = now;
+            if (!shouldEmitAlert(it.msg, Date.now(), S.alertCoolDown)) return;
             root.recordAlert(it.level, it.msg);
         });
     }
@@ -254,7 +296,6 @@
             }).catch(function () { /* 告警转发失败不影响页面 */ });
         } catch (e) { /* fetch 不可用时忽略 */ }
     }
-
     /* ---------------- SocketIO ---------------- */
     function initSocket() {
         if (typeof io === 'undefined') return;
@@ -453,7 +494,11 @@
         sendAutoCommand: sendAutoCommand,
         sendManualCommand: sendManualCommand,
         applySnapshot: applySnapshot,
-        loadLatest: loadLatest
+        loadLatest: loadLatest,
+        alertFingerprint: alertFingerprint,
+        shouldEmitAlert: shouldEmitAlert,
+        ALERT_COOLDOWN_MS: ALERT_COOLDOWN_MS,
+        ALERT_MIN_GAP_MS: ALERT_MIN_GAP_MS
     };
 
     root.refreshStatus = refreshStatus;
@@ -461,4 +506,14 @@
     root.checkAlerts = checkAlerts;
     root.recordAlert = recordAlert;
     root.sendManualCommand = sendManualCommand;
+
+    // node 单测出口：浏览器下无 module，静默跳过
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = {
+            alertFingerprint: alertFingerprint,
+            shouldEmitAlert: shouldEmitAlert,
+            ALERT_COOLDOWN_MS: ALERT_COOLDOWN_MS,
+            ALERT_MIN_GAP_MS: ALERT_MIN_GAP_MS
+        };
+    }
 })(typeof globalThis !== 'undefined' ? globalThis : this);

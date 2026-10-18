@@ -30,6 +30,7 @@
         chartDirty: false,
         // 自动调控去重标记
         alertCoolDown: {},
+        logCoolDown: {},
         pumpAutoState: '',
         airPumpAutoState: '',
         // 心跳：连续丢心跳达此上限即判设备离线。

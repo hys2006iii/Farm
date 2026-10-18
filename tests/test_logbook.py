@@ -23,16 +23,20 @@ def _insert_log_row(uid, ts, level='info', source='system', message='测试日�
 
 @pytest.fixture(autouse=True)
 def _logbook_isolation(flask_app):
-    """每个用例重置队列、丢弃计数与建表标记，结束后确保线程停止。"""
+    """每个用例重置队列、丢弃计数、冷却表与建表标记，结束后确保线程停止。"""
     logbook._writer.stop()
     logbook._writer.queue = queue.Queue(maxsize=logbook.QUEUE_MAX)
     logbook._writer.dropped = 0
     logbook._schema_ready = False
+    # 重复日志冷却表是进程级全局：本文件大量用例写的是同一条/同形正文，
+    # 不清掉会让后一个用例的写入被前一个用例的冷却挡下。
+    logbook.reset_recent_logs()
     yield
     try:
         logbook.flush_logs()
     finally:
         logbook._writer.stop()
+        logbook.reset_recent_logs()
 
 
 def test_ensure_schema_idempotent(flask_app):
@@ -57,7 +61,7 @@ def test_add_log_is_nonblocking_and_flush_persists(flask_app):
     started = time.monotonic()
     result = logbook.add_log(uid, '水泵启动', 'warning', 'device')
     elapsed = time.monotonic() - started
-    assert result is None
+    assert result is True
     assert elapsed < 0.5
 
     logbook.flush_logs()
@@ -80,7 +84,7 @@ def test_add_log_nonblocking_when_queue_full(flask_app, monkeypatch):
 
     started = time.monotonic()
     for index in range(200):
-        logbook.add_log(uid, '事件%d' % index)
+        logbook.add_log(uid, '事件%d' % index, cooldown=0)
     elapsed = time.monotonic() - started
 
     assert elapsed < 1.0
@@ -99,7 +103,7 @@ def test_queue_full_drops_oldest(flask_app, monkeypatch):
     logbook._writer.queue = queue.Queue(maxsize=3)
 
     for index in range(5):
-        logbook.add_log(uid, 'msg%d' % index)
+        logbook.add_log(uid, 'msg%d' % index, cooldown=0)
     assert logbook.dropped_count() == 2
 
     monkeypatch.setattr(logbook._writer, 'start', original_start)
@@ -184,7 +188,7 @@ def test_queue_dropped_count_starts_at_zero(flask_app):
     try:
         logbook._writer.queue = queue.Queue(maxsize=2)
         for index in range(4):
-            logbook.add_log(uid, 'x%d' % index)
+            logbook.add_log(uid, 'x%d' % index, cooldown=0)
         assert logbook.dropped_count() == 2
     finally:
         logbook._writer.start = original_start
