@@ -539,16 +539,33 @@ def ensure_default_farm(uid: int) -> dict:
 
 def save_active_farm_meta(uid: int, name=None, lat=None, lon=None,
                           area_m2=None, polygon=None) -> bool:
-    """保存设置页里对「当前地块」的修改（名称/坐标/面积/边界）。"""
+    """保存设置页里对「当前地块」的修改（名称/坐标/面积/边界）。
+
+    **参数为 None 表示「本次不改动该字段」**，保持地块记录原值。
+    因此本函数无法用 None 表达「把坐标清空」——调用方若需要清空坐标，
+    应显式传入空字符串 `''`（本函数会把它转成 `None` 落库）。
+    """
     farm = ensure_default_farm(uid)
     if farm is None:
         return False
+
+    def _coord(value, current):
+        """坐标取值：None=不改动，''=清空（落 NULL），其余转 float。"""
+        if value is None:
+            return current
+        if isinstance(value, str) and not value.strip():
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return current
+
     return update_farm(
         uid,
         farm['id'],
         name if name is not None else farm['name'],
-        lat if lat is not None else farm['lat'],
-        lon if lon is not None else farm['lon'],
+        _coord(lat, farm['lat']),
+        _coord(lon, farm['lon']),
         area_m2 if area_m2 is not None else farm['area_m2'],
         polygon if polygon is not None else farm['polygon'],
     )

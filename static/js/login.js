@@ -212,6 +212,9 @@
             if (!data || data.status !== 'success') {
                 alert((data && (data.message || data.error)) || '地块切换失败，仍将进入监控台');
             }
+            // 切换失败时 activeFarmId 仍是旧值，把选择同步回去，
+            // 避免用户点了「返回」后再进来看到高亮与实际生效地块不一致。
+            activeFarmId = (data && data.status === 'success') ? selectedFarmId : activeFarmId;
             window.location.href = '/';
         }).catch(function () {
             alert('地块切换请求异常，仍将进入监控台');

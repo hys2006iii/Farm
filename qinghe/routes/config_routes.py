@@ -104,6 +104,37 @@ def _validate_coords(data, values):
         values[key] = raw.strip() if isinstance(raw, str) else round(value, 6)
 
 
+#: 「本次显式提交了该坐标，但值为空（用户清空）」的哨兵。
+#: 不能用 None：`db.save_active_farm_meta()` 把 None 解释成「不改动」，
+#: 两者语义不同，混用会导致清空坐标后 farms 表仍留旧值。
+_COORD_CLEARED = object()
+
+
+def _explicit_coords(data) -> dict:
+    """取出本次**显式提交**的经纬度（用于同步到地块记录）。
+
+    三种情况分开表达：
+      - 字段未提交 / 值为 None / 掩码占位 → 不出现在返回值里（不改动）；
+      - 提交了空串 → 值为 `_COORD_CLEARED`（显式清空）；
+      - 提交了数字 → 值为 float。
+
+    `_validate_coords()` 为了兼容「空串 = 清空坐标」的语义会把空串写成 `''`；
+    若这里再把它折成 `None` 传给 `db.save_active_farm_meta()`，会因为
+    「参数为 None 表示不改动」的约定而**保留旧坐标** —— 用户清空经纬度后，
+    `farms` 表里仍留着旧值，下次登录镜像回 `configs` 时坐标又冒出来。
+    """
+    out = {}
+    for key in _COORD_FIELDS:
+        if key not in data or data[key] is None or data[key] == config.MASK:
+            continue
+        raw = data[key]
+        if isinstance(raw, str) and not raw.strip():
+            out[key] = _COORD_CLEARED
+        else:
+            out[key] = _to_float(raw)
+    return out
+
+
 @bp.route('/api/get_config', methods=['GET'])
 def api_get_config():
     """读取当前用户配置；敏感凭据不回显明文，已设置则返回掩码占位。"""
@@ -161,14 +192,25 @@ def api_save_config():
     values['iot_port'] = port
 
     db.save_config(uid, values)
-    # 设置页改的农场名/经纬度同步到当前地块记录，避免 farms 表与 configs 漂移
+    # 设置页改的农场名/经纬度同步到当前地块记录，避免 farms 表与 configs 漂移。
+    # 坐标只同步「本次显式提交」的那一维：没提交的一维保持地块记录原值，
+    # 提交了空串的一维才真正清空（见 _explicit_coords / _COORD_CLEARED）。
     try:
-        db.save_active_farm_meta(
-            uid,
-            name=values.get('farm_name') or None,
-            lat=_to_float(values.get('farm_lat')),
-            lon=_to_float(values.get('farm_lng')),
-        )
+        coords = _explicit_coords(data)
+        farm_meta = {}
+        if values.get('farm_name'):
+            farm_meta['name'] = values['farm_name']
+        # 清空坐标用空串表达（save_active_farm_meta 把 None 解释为「不改动」）
+        if coords.get('farm_lat') is _COORD_CLEARED:
+            farm_meta['lat'] = ''
+        elif 'farm_lat' in coords:
+            farm_meta['lat'] = coords['farm_lat']
+        if coords.get('farm_lng') is _COORD_CLEARED:
+            farm_meta['lon'] = ''
+        elif 'farm_lng' in coords:
+            farm_meta['lon'] = coords['farm_lng']
+        if farm_meta:
+            db.save_active_farm_meta(uid, **farm_meta)
     except Exception:  # noqa: BLE001 - 地块同步失败不影响配置保存
         pass
     # 异步重连：避免 connect() 的 60s 超时阻塞请求线程
