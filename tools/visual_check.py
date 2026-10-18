@@ -412,6 +412,19 @@ def run(args) -> int:
                     controlH: Math.round(c.getBoundingClientRect().height),
                     sensorGridH: Math.round(
                         s.querySelector('.sensor-grid').getBoundingClientRect().height),
+                    // 概览带：量副标题底边到卡片底边的空隙（即卡片真正的空白），
+                    // 以及数值底边到副标题顶边的空隙。副标题锁两行，因此只要卡内
+                    // 没有多出来的空档，这两个值都应当很小。
+                    kpiGaps: [...document.querySelectorAll('.kpi')].map(e => {
+                        const v = e.querySelector('.kpi-value').getBoundingClientRect();
+                        const sub = e.querySelector('.kpi-sub');
+                        const sr = sub.getBoundingClientRect();
+                        const eb = e.getBoundingClientRect();
+                        return {tail: Math.round(eb.bottom - sr.bottom),
+                                mid: Math.round(sr.top - v.bottom),
+                                subH: Math.round(sr.height),
+                                subText: sub.textContent.trim().length};
+                    }),
                     title: t, cells: cells, fills: fills,
                     logH: Math.round(document.querySelector('.log-scroll').getBoundingClientRect().height),
                     overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth};
@@ -435,6 +448,15 @@ def run(args) -> int:
                         % (delta, layout['sensorH'], layout['controlH'])))
         results.append(('阈值滑块有区间高亮', len(layout['fills']) == 2
                         and all(f['width'] > 0 for f in layout['fills']), layout['fills']))
+        # 概览带「铺满」：四张卡等高，副标题锁两行（33px）。卡内真正的空白是
+        # 「副标题底边 → 卡片底边」这一段（tail）与「数值底边 → 副标题顶边」（mid），
+        # 两者都应只剩内边距的量级。若某张卡副标题只有一行、数值又贴顶，就会多出
+        # 一行 16.5px 的空档——那正是用户说的「框没铺满」。
+        kpi_gaps = layout['kpiGaps']
+        results.append(('概览卡片内无大片留白',
+                        len(kpi_gaps) == 4
+                        and all(g['tail'] <= 16 and g['mid'] <= 10 for g in kpi_gaps),
+                        kpi_gaps))
         results.append(('日志卡高度正常（未塌陷）', layout['logH'] > 100, layout['logH']))
         results.append(('无横向溢出', layout['overflowX'] <= 0, layout['overflowX']))
 
@@ -454,12 +476,17 @@ def run(args) -> int:
                          'cfgWeatherKey','cfgAiDomain','cfgAiKey','cfgWebhookUrl'];
             const missing = ids.filter(i => !document.getElementById(i));
             const hasSim = !!document.getElementById('simBlock');
-            return {blocks: blocks, missing: missing, hasSim: hasSim};
+            // 物联网接入按地块独立：作用域标签必须存在且带当前地块名，
+            // 否则用户无从知道这组参数会落到哪块地上。
+            const scope = document.getElementById('iotScopeTag');
+            return {blocks: blocks, missing: missing, hasSim: hasSim,
+                    scope: scope ? scope.textContent.trim() : ''};
         })()""")
         browser.screenshot(os.path.join(out_dir, '03_settings.png'))
         results.append(('系统设置已按语义分组', len(cfg['blocks']) >= 6, cfg['blocks']))
         results.append(('设置字段 id 无缺失', not cfg['missing'], cfg['missing']))
         results.append(('「演示数据」模块已移除', not cfg['hasSim'], cfg['hasSim']))
+        results.append(('物联网接入标注按地块独立', '按地块独立' in cfg['scope'], cfg['scope']))
         results.append(('地图降级提示可见（离线可用）',
                         browser.evaluate(
                             "(() => { const f = document.getElementById('farmMapFallback');"
