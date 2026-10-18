@@ -227,9 +227,6 @@
     font-size: 11.5px; color: var(--ink-3); background: var(--paper-2);
 }
 .farm-map-fallback[hidden] { display: none; }
-.farm-map-note {
-    margin: 6px 0 0; font-size: 11px; color: var(--ink-3); line-height: 1.6;
-}
 
 .farm-summary {
     display: flex; flex-wrap: wrap; gap: 6px 18px;

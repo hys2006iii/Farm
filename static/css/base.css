@@ -119,18 +119,6 @@ body {
     display: flex; align-items: center; white-space: nowrap;
 }
 
-/* ===== 数据新鲜度胶囊 =====
-   与「设备是否离线」分开表达：这里回答的是「画面上的数字有多旧」。
-   颜色只换文字与一条 2px 左边线，不铺色块，保持顶栏的墨绿底不被切碎。 */
-.freshness-pill {
-    font-size: 10.5px; letter-spacing: 0.04em; white-space: nowrap;
-    padding-left: 7px; border-left: 2px solid transparent;
-    font-variant-numeric: tabular-nums;
-}
-.freshness-pill.freshness-fresh { color: #9CC3A8; border-left-color: #6FAE85; }
-.freshness-pill.freshness-stale { color: #D9C089; border-left-color: #C8903F; }
-.freshness-pill.freshness-lost { color: #C99A8F; border-left-color: #C1634F; }
-
 /* ===== 主布局 =====
    需求：左列「田间实时数据」卡片与右列「调控与阈值」卡片底边齐平。
    两列卡片数量不同（左 4 张、右 2 张），用列内 grid + 显式行轨道对齐：

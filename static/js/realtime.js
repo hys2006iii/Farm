@@ -167,49 +167,6 @@
         if (pumpCmd) sendAutoCommand('water_pump', pumpCmd);
     }
 
-    /* ---------------- 数据新鲜度 ---------------- */
-    /**
-     * 把「距上次收到遥测的毫秒数」翻译成人和看板都能判断的状态。
-     *
-     * 纯函数，便于单测：`fresh`（<15s，墨绿）/ `stale`（<60s，赭金）/
-     * `lost`（≥60s 或从未收到，朱红）。
-     * 阈值与后端 `heartbeat.DEVICE_OFFLINE_SECONDS = 30` 不冲突：30s 判离线是
-     * 「设备状态」，这里表达的是「画面上的数字有多旧」，给到 60s 才标红，
-     * 避免与离线判定在同一秒里给出两种互相矛盾的观感。
-     */
-    var FRESH_MS = 15000;
-    var STALE_MS = 60000;
-
-    /**
-     * @param {number} ageMs 毫秒；null/undefined/NaN 表示从未收到
-     * @returns {{level:'fresh'|'stale'|'lost', text:string}}
-     */
-    function freshnessState(ageMs) {
-        if (ageMs === null || ageMs === undefined || !isFinite(ageMs) || ageMs < 0) {
-            return { level: 'lost', text: '尚未收到数据' };
-        }
-        var seconds = Math.floor(ageMs / 1000);
-        var text;
-        if (seconds < 60) text = seconds + ' 秒前更新';
-        else if (seconds < 3600) text = Math.floor(seconds / 60) + ' 分钟前更新';
-        else text = Math.floor(seconds / 3600) + ' 小时前更新';
-        if (ageMs < FRESH_MS) return { level: 'fresh', text: text };
-        if (ageMs < STALE_MS) return { level: 'stale', text: text };
-        return { level: 'lost', text: text };
-    }
-
-    /** 把新鲜度写到顶栏胶囊上（颜色用 class，不用内联样式，方便统一调整） */
-    function renderFreshness() {
-        var el = QH.$('dataFreshnessPill');
-        if (!el) return;
-        var age = S.lastTelemetryAt ? (Date.now() - S.lastTelemetryAt) : null;
-        var state = freshnessState(age);
-        QH.setText(el, '数据 ' + state.text);
-        QH.toggleClass(el, 'freshness-fresh', state.level === 'fresh');
-        QH.toggleClass(el, 'freshness-stale', state.level === 'stale');
-        QH.toggleClass(el, 'freshness-lost', state.level === 'lost');
-    }
-
     /* ---------------- 心跳 ---------------- */
     /**
      * 在线检测增加冗余：连续丢心跳达 S.heartbeatMissLimit 次才判离线，单次/偶发丢包不误判。
@@ -383,7 +340,6 @@
                 S.dataReceived = true;
                 S.deviceOnline = true;
                 // 记录「画面上这组读数是什么时候到的」，供顶部新鲜度胶囊展示
-                S.lastTelemetryAt = Date.now();
             }
 
             if (topic === 'waterlevel' || (jsonObj && jsonObj.waterlevel !== undefined)) {
@@ -509,7 +465,6 @@
         if (applied) {
             // 记录快照时间：服务端有新鲜数据即视为设备在线（MQTT 链路状态单独看顶部胶囊）
             S.lastSnapshotAt = Date.now();
-            S.lastTelemetryAt = Date.now();
             S.dataReceived = true;
             S.deviceOnline = true;
             S.heartbeatMiss = 0;
@@ -543,12 +498,8 @@
         loadLatest: loadLatest,
         alertFingerprint: alertFingerprint,
         shouldEmitAlert: shouldEmitAlert,
-        freshnessState: freshnessState,
-        renderFreshness: renderFreshness,
         ALERT_COOLDOWN_MS: ALERT_COOLDOWN_MS,
         ALERT_MIN_GAP_MS: ALERT_MIN_GAP_MS,
-        FRESH_MS: FRESH_MS,
-        STALE_MS: STALE_MS
     };
 
     root.refreshStatus = refreshStatus;
@@ -556,18 +507,14 @@
     root.checkAlerts = checkAlerts;
     root.recordAlert = recordAlert;
     root.sendManualCommand = sendManualCommand;
-    root.renderFreshness = renderFreshness;
 
     // node 单测出口：浏览器下无 module，静默跳过
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = {
             alertFingerprint: alertFingerprint,
             shouldEmitAlert: shouldEmitAlert,
-            freshnessState: freshnessState,
             ALERT_COOLDOWN_MS: ALERT_COOLDOWN_MS,
             ALERT_MIN_GAP_MS: ALERT_MIN_GAP_MS,
-            FRESH_MS: FRESH_MS,
-            STALE_MS: STALE_MS
         };
     }
 })(typeof globalThis !== 'undefined' ? globalThis : this);

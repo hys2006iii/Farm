@@ -9,7 +9,7 @@
          版本：socket.io 4.7.1 / Chart.js 4.4.1 / Leaflet 1.9.4，见 static/vendor/README.md -->
     <script src="{{ url_for('static', filename='vendor/socket.io.min.js') }}" defer></script>
     <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}" defer></script>
-    <!-- Leaflet：仅系统设置里的「地图选点 / 圈地」用到；瓦片不可达时自动降级为手填经纬度 -->
+    <!-- Leaflet：仅系统设置里的「气象监测点 / 边界设置」用到；瓦片不可达时自动降级为手填经纬度 -->
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/leaflet/leaflet.css') }}">
     <script src="{{ url_for('static', filename='vendor/leaflet/leaflet.js') }}" defer></script>
     <!-- 样式：按职责拆分，顺序 base -> dashboard -> modal -> insight -->
@@ -52,8 +52,6 @@
         <div class="status-col">
             <div class="status-pill" id="cloudStatus"><span class="status-dot dot-gray"></span>华为云：未连接</div>
             <div class="status-pill" id="deviceStatusPill"><span class="status-dot dot-gray"></span>传感器：未连接</div>
-            <!-- 数据新鲜度：画面上这组读数是什么时候到的（与「设备是否离线」分开表达） -->
-            <div class="freshness-pill freshness-lost" id="dataFreshnessPill">数据 尚未收到数据</div>
         </div>
     </div>
 </div>
@@ -339,7 +337,7 @@
         <div class="cfg-block">
             <div class="cfg-block-hd">
                 <h3>地块与位置</h3>
-                <span class="cfg-block-sub">看板、AI 快照与灌溉建议都按「当前地块」计算；下方可地图选点或圈出边界</span>
+                <span class="cfg-block-sub">看板、AI 快照与灌溉建议都按「当前地块」计算；下方可点选气象监测点或设置地块边界</span>
             </div>
             <div class="cfg-row">
                 <label>农场名称</label>
@@ -351,7 +349,7 @@
             </div>
         </div>
 
-        <!-- 地块管理：地图选点 / 圈地 + 多地块增删改切 -->
+        <!-- 地块管理：气象监测点 / 边界设置 + 多地块增删改切 -->
         <div class="cfg-block">
             <div class="cfg-block" id="farmBlock">
                 <div class="cfg-block-hd">
@@ -360,17 +358,17 @@
                 </div>
 
             <div class="farm-map-tools">
-                <button type="button" class="btn-link" id="mapPickBtn" onclick="QH_FARM.setMapMode('pick')">地图选点</button>
-                <button type="button" class="btn-link" id="mapPolyBtn" onclick="QH_FARM.setMapMode('poly')">圈出边界</button>
-                <button type="button" class="btn-link" id="mapUndoBtn" onclick="QH_FARM.undoPolyPoint()">撤回一点</button>
-                <button type="button" class="btn-link" id="mapClearBtn" onclick="QH_FARM.clearPoly()">清除边界</button>
-                <span class="farm-map-hint" id="farmMapHint">在地图上点一下即取该点经纬度；圈地模式下逐点点击勾出田块边界</span>
+                <button type="button" class="btn-link" id="mapPickBtn" onclick="QH_FARM.setMapMode('pick')">气象监测点</button>
+                <button type="button" class="btn-link" id="mapPolyBtn" onclick="QH_FARM.setMapMode('poly')">边界设置</button>
+                <button type="button" class="btn-link" id="mapUndoBtn" onclick="QH_FARM.undoPolyPoint()">撤回</button>
+                <button type="button" class="btn-link" id="mapRedoBtn" onclick="QH_FARM.redoPolyPoint()">回退</button>
+                <button type="button" class="btn-link" id="mapClearBtn" onclick="QH_FARM.clearPoly()">清空</button>
+                <span class="farm-map-hint" id="farmMapHint">在地图上点一下即取该点经纬度；边界设置模式下逐点点击勾出田块边界</span>
             </div>
             <div class="farm-map" id="farmMap" role="application" aria-label="地块位置地图"></div>
             <div class="farm-map-fallback" id="farmMapFallback" hidden>
                 地图底图未加载（离线或瓦片不可达），可直接在上方填写经纬度。
             </div>
-            <p class="farm-map-note">底图为高德卫星影像（GCJ-02 坐标），与气象接口使用的 WGS84 有百米级偏差，定位到田块够用。</p>
 
             <div class="farm-summary">
                 <span class="farm-summary-item">当前地块：<b id="farmCurrentName">—</b></span>
@@ -379,14 +377,13 @@
             </div>
 
             <div class="farm-newrow">
-                <input type="text" id="newFarmName" placeholder="新地块名称，如 西二垄试验田" maxlength="24">
+                <input type="text" id="newFarmName" placeholder="新地块名称，如 西二垄试验田" maxlength="20">
                 <button type="button" class="btn-wide" id="newFarmBtn" onclick="QH_FARM.saveAsNew()">另存为新地块</button>
             </div>
 
             <div class="farm-list" id="farmList"></div>
             <div class="cfg-actions left">
                 <button type="button" class="btn-wide" onclick="QH_FARM.saveCurrent()">保存地块信息</button>
-                <span class="farm-map-hint">改了名称 / 经纬度 / 边界后点这里写入当前地块（上方「保存设置」只管设备与接口配置）</span>
             </div>
             <div class="farm-note">切换地块会同步更新看板、AI 快照与灌溉建议；删除前请确认该地块不再使用。</div>
             </div>

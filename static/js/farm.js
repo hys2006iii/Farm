@@ -1,5 +1,5 @@
 /* ============================================================
- * farm.js — 多地块：顶栏切换器 / 设置页地块管理 / 地图选点与圈地
+ * farm.js — 多地块：顶栏切换器 / 设置页地块管理 / 气象监测点与边界设置
  *
  * 依赖：core.js 的 QH，Leaflet（可缺失，缺失时降级为手填经纬度）
  * 治理点：
@@ -27,6 +27,9 @@
         marker: null,
         polygon: null,
         polyPoints: [],
+        // 撤回/回退栈：撤回与清空都把点推到这里，「回退」再取回。
+        // 只存一份即够——圈地时每加一个点就清空它（见 addPolyPoint）。
+        redoPoints: [],
         mode: 'pick',
         mapReady: false
     };
@@ -107,7 +110,7 @@
             });
             menu.appendChild(row);
         });
-        var manage = el('button', 'farm-menu-row farm-menu-manage', '管理地块 / 地图选点');
+        var manage = el('button', 'farm-menu-row farm-menu-manage', '管理地块 / 气象监测点');
         manage.type = 'button';
         manage.addEventListener('click', function () {
             hideMenu();
@@ -202,6 +205,8 @@
     }
 
     function loadPolygonFromFarm(farm) {
+        // 换地块时撤回历史必须一起清掉，否则会把上一块地的点「回退」到这一块上
+        state.redoPoints = [];
         if (!farm || !farm.polygon) { state.polyPoints = []; drawPolygon(); return; }
         try {
             var parsed = JSON.parse(farm.polygon);
@@ -223,6 +228,8 @@
                 return;
             }
             state.polyPoints.push([lat, lon]);
+            // 新点进来后，之前撤回的历史就作废了，否则「回退」会接出错误的顺序
+            state.redoPoints = [];
             drawPolygon();
             updateSummary();
             return;
@@ -260,8 +267,8 @@
         var hint = QH.$('farmMapHint');
         if (hint) {
             QH.setText(hint, state.mode === 'poly'
-                ? '圈地模式：沿田块边界逐点点击（至少 3 点），点完点「保存地块信息」'
-                : '选点模式：点一下地图即取该点经纬度，填进上方经度/纬度');
+                ? '边界设置：沿田块边界逐点点击（至少 3 点），点完点「保存地块信息」'
+                : '气象监测点：点一下地图即取该点经纬度，填进上方经度/纬度');
         }
         ['mapPickBtn', 'mapPolyBtn'].forEach(function (id) {
             var btn = QH.$(id);
@@ -271,14 +278,26 @@
         });
     }
 
+    /** 撤回一点：把最后一点挪进 redo 栈，可再「回退」找回来 */
     function undoPolyPoint() {
         if (!state.polyPoints.length) return;
-        state.polyPoints.pop();
+        state.redoPoints.push(state.polyPoints.pop());
         drawPolygon();
         updateSummary();
     }
 
+    /** 回退：把刚撤回的那一点放回去（连续撤回可连续回退） */
+    function redoPolyPoint() {
+        if (!state.redoPoints.length) return;
+        state.polyPoints.push(state.redoPoints.pop());
+        drawPolygon();
+        updateSummary();
+    }
+
+    /** 清空边界：整条存进 redo 栈，误点清空后仍能一步步回退回来 */
     function clearPoly() {
+        if (!state.polyPoints.length) return;
+        state.redoPoints = state.polyPoints.slice().reverse();
         state.polyPoints = [];
         drawPolygon();
         updateSummary();
@@ -465,6 +484,7 @@
         deleteFarm: deleteFarm,
         setMapMode: setMapMode,
         undoPolyPoint: undoPolyPoint,
+        redoPolyPoint: redoPolyPoint,
         clearPoly: clearPoly,
         polygonArea: polygonArea,
         areaText: areaText,

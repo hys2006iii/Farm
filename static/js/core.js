@@ -22,7 +22,6 @@
         deviceOnline: false,
         dataReceived: false,
         // 最近一次收到遥测的本地毫秒时间戳（null = 从未收到），供新鲜度胶囊展示
-        lastTelemetryAt: null,
         socket: null,
         // 图表 / 趋势
         waterChart: null, soilChart: null, roriChart: null,

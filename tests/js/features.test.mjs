@@ -1,12 +1,7 @@
 /**
- * features.test.mjs — 本轮新增两个纯函数的单测
+ * features.test.mjs — 阈值预设纯函数的单测
  *
- * 1) `freshnessState(ageMs)`（realtime.js）
- *    把「距上次收到遥测的毫秒数」翻译成新鲜度状态。看板顶栏据此显示
- *    「N 秒前更新」并在数字变旧时换色 —— 与「设备是否离线」是两件事：
- *    设备可能在线但很久没上报，也可能刚上报过而 MQTT 链路显示断开。
- *
- * 2) `threshPreset(key)`（config.js）
+ * `threshPreset(key)`（config.js）
  *    「节水优先 / 标准灌溉 / 保墒防旱」三个阈值预设。四个数字一旦写错，
  *    自动调控就会在错误的区间里开关泵，所以单独锁住。
  *
@@ -40,51 +35,7 @@ globalThis.QH = {
 globalThis.S = { alertCoolDown: {}, logCoolDown: {}, config: {}, manualMode: false };
 globalThis.QH_STORE = { pushLog: () => ({}), pushAlert: () => ({}), getLogs: () => [], getAlerts: () => [] };
 
-const RT = require('../../static/js/realtime.js');
 const CFG = require('../../static/js/config.js');
-
-/* ==================== 数据新鲜度 ==================== */
-
-test('freshnessState: 15 秒内为 fresh', () => {
-    assert.equal(RT.freshnessState(0).level, 'fresh');
-    assert.equal(RT.freshnessState(3_000).level, 'fresh');
-    assert.equal(RT.freshnessState(14_999).level, 'fresh');
-});
-
-test('freshnessState: 15~60 秒为 stale（画面变旧但没到不可信）', () => {
-    assert.equal(RT.freshnessState(15_000).level, 'stale');
-    assert.equal(RT.freshnessState(45_000).level, 'stale');
-    assert.equal(RT.freshnessState(59_999).level, 'stale');
-});
-
-test('freshnessState: 60 秒及以上为 lost', () => {
-    assert.equal(RT.freshnessState(60_000).level, 'lost');
-    assert.equal(RT.freshnessState(3_600_000).level, 'lost');
-});
-
-test('freshnessState: 从未收到数据（null/undefined/NaN/负数）为 lost', () => {
-    for (const bad of [null, undefined, NaN, -1, 'abc']) {
-        const state = RT.freshnessState(bad);
-        assert.equal(state.level, 'lost', String(bad));
-    }
-});
-
-test('freshnessState: 秒/分/小时文案随量级切换', () => {
-    assert.match(RT.freshnessState(5_000).text, /秒前更新/);
-    assert.match(RT.freshnessState(90_000).text, /分钟前更新/);
-    assert.match(RT.freshnessState(3_600_000).text, /小时前更新/);
-});
-
-test('freshnessState: 文案里带具体秒数，便于运维判断', () => {
-    assert.match(RT.freshnessState(7_000).text, /7 秒/);
-    assert.match(RT.freshnessState(120_000).text, /2 分钟/);
-});
-
-test('freshness 阈值常量：fresh < stale < 60s 判离线', () => {
-    assert.ok(RT.FRESH_MS > 0 && RT.FRESH_MS < RT.STALE_MS);
-    assert.equal(RT.FRESH_MS, 15000);
-    assert.equal(RT.STALE_MS, 60000);
-});
 
 /* ==================== 阈值预设 ==================== */
 
@@ -149,4 +100,49 @@ test('threshPreset: 返回的是副本，改它不会污染全局预设', () => 
     const first = CFG.threshPreset('standard');
     first.humi_down = -999;
     assert.equal(CFG.threshPreset('standard').humi_down, 40);
+});
+
+/* ==================== 预设选中态 ==================== */
+
+/** 造一个假按钮：只实现 markThreshPreset 会用到的那点 DOM 接口。 */
+function fakeButton(preset) {
+    const classes = new Set();
+    return {
+        classes,
+        getAttribute: (name) => (name === 'data-preset' ? preset : null),
+        classList: {
+            toggle(name, on) { if (on) classes.add(name); else classes.delete(name); }
+        }
+    };
+}
+
+test('markThreshPreset: 只有被选中的那个按钮带 is-on', () => {
+    const buttons = [fakeButton('water_saving'), fakeButton('standard'), fakeButton('moisture_hold')];
+    const marked = CFG.markThreshPreset(buttons, 'moisture_hold');
+    assert.equal(marked, 1);
+    assert.equal(buttons[0].classes.has('is-on'), false);
+    assert.equal(buttons[1].classes.has('is-on'), false);
+    assert.equal(buttons[2].classes.has('is-on'), true);
+});
+
+test('markThreshPreset: 换选另一个模式时旧的选中态被清掉', () => {
+    const buttons = [fakeButton('water_saving'), fakeButton('standard')];
+    CFG.markThreshPreset(buttons, 'standard');
+    assert.equal(buttons[1].classes.has('is-on'), true);
+    CFG.markThreshPreset(buttons, 'water_saving');
+    assert.equal(buttons[0].classes.has('is-on'), true);
+    assert.equal(buttons[1].classes.has('is-on'), false, '旧选中态必须清掉，否则会同时高亮两个');
+});
+
+test('markThreshPreset: 未知键把所有按钮都置为未选中', () => {
+    const buttons = [fakeButton('standard')];
+    CFG.markThreshPreset(buttons, 'standard');
+    assert.equal(CFG.markThreshPreset(buttons, 'no-such'), 0);
+    assert.equal(buttons[0].classes.has('is-on'), false);
+});
+
+test('markThreshPreset: 传入空值不抛异常（模板未渲染时也要安全）', () => {
+    assert.equal(CFG.markThreshPreset(null, 'standard'), 0);
+    assert.equal(CFG.markThreshPreset(undefined, 'standard'), 0);
+    assert.equal(CFG.markThreshPreset([null, undefined], 'standard'), 0);
 });

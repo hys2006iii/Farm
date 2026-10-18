@@ -262,6 +262,25 @@
         };
     }
 
+    /**
+     * 把选中态画到三个预设按钮上：只有被点中的那个带 `is-on`。
+     *
+     * 单独抽出来是为了让「点预设 → 立刻看得出选了哪个」这件事有唯一实现，
+     * 也便于 node 下单测（不需要真实 DOM，传进来的按钮只要能被读 classList）。
+     */
+    function markThreshPreset(buttons, key) {
+        if (!buttons || typeof buttons.length !== 'number') return 0;
+        var marked = 0;
+        for (var i = 0; i < buttons.length; i++) {
+            var btn = buttons[i];
+            if (!btn || !btn.classList) continue;
+            var on = btn.getAttribute && btn.getAttribute('data-preset') === key;
+            btn.classList.toggle('is-on', !!on);
+            if (on) marked++;
+        }
+        return marked;
+    }
+
     /** 把预设套到四个滑杆上并刷新联动文案（不自动保存，用户点「应用参数」才落库） */
     function applyThreshPreset(key) {
         var preset = threshPreset(key);
@@ -282,6 +301,11 @@
             updateDualRangeFill('humiDownInput', 'humiUpInput');
             updateDualRangeFill('waterlevelDownInput', 'waterlevelUpInput');
         }
+        // 选中态：模板里按钮是写死 class 的，用户点了别的模式必须跟着换，
+        // 否则三个按钮一直高亮「标准灌溉」，看起来像没生效。
+        var buttons = (root.document && root.document.querySelectorAll)
+            ? root.document.querySelectorAll('.thresh-preset') : null;
+        markThreshPreset(buttons, key);
         root.updateThresholdFusionHint();
         if (root.toast) root.toast('已套用「' + preset.name + '」，点「应用参数」后生效', 'success');
         return preset;
@@ -337,6 +361,7 @@
         module.exports = {
             dualRangeGeometry: dualRangeGeometry,
             threshPreset: threshPreset,
+            markThreshPreset: markThreshPreset,
             THRESH_PRESETS: THRESH_PRESETS
         };
     }

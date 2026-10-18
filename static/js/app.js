@@ -183,7 +183,6 @@
         QH.registerTask('clock', 1000, function () {
             updateClock();
             // 新鲜度每秒重算：读数变旧是"时间流逝"造成的，不能只在收到数据时更新
-            REALTIME.renderFreshness();
         });
         QH.registerTask('chart', 2000, function () {
             if (!S.chartDirty) return;
