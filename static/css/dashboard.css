@@ -270,13 +270,10 @@
 }
 .rori-approx-note:not([hidden]) { display: block; }
 
-/* ===== 日志：固定视窗内滚动，不撑破卡片；
-   右列第 2 行有富余高度时随卡片一起长高（.log-stretch 由 base.css 撑满 1fr 行） ===== */
+/* ===== 日志：固定视窗内滚动，不撑破卡片 ===== */
 .log-stretch { flex: 0 0 auto; }
 .log-stretch .section-bd { padding-bottom: 8px; }
 .log-stretch .log-scroll { height: 236px; overflow-y: auto; }
-/* 看板右列：日志卡片撑满剩余行高，滚动区跟着长高，不再留大片空白 */
-.right-col > .log-stretch .log-scroll { height: auto; min-height: 236px; }
 .log-item { border-left-width: 2px; padding: 5px 8px 5px 10px; }
 .log-item .log-time { font-variant-numeric: tabular-nums; }
 .log-item .log-msg { font-size: 12.5px; }
