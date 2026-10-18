@@ -1,15 +1,17 @@
-"""青禾智灌 —— 无实物主板时的设备模拟器。
+"""青禾智灌 —— 外部联调用的遥测序列生成器。
 
-答辩 / 演示 / 自测常常只有一台电脑，没有 ESP32-E 实物。本模块按预设场景
-生成一段**带时间戳**的遥测序列，走与真实 MQTT 上报完全相同的处理链路：
+定位（重要）：**本模块是给仓库外的联调脚本/压测脚本用的"数据发生器"，
+不是系统功能，也不向运行中的服务端暴露任何接口。** 它只做两件事：
 
-    ingest_telemetry() → 历史落库 → 心跳 / RORI 上下文 / 泵时长 / 自动调控 / 告警
+1. `build_series()` 生成一段**带物理合理性**的四路遥测序列（纯函数，无 IO）；
+2. `run_simulation()` 直接调用 `iot.ingest_telemetry()` 把序列灌进指定账号，
+   走的是与真实 MQTT 上报**完全相同**的落库 / 心跳 / RORI / 告警链路。
 
-因此前端看板、智能洞察、历史趋势、CSV 导出、AI 助手快照全部会有真实数据，
-不需要连华为云 IoTDA。
+因此它可以被 pytest、CI、或开发者自己的外部脚本直接 import 使用，
+而系统本身（网页、HTTP 接口）里看不到任何"演示数据 / 无硬件调试"入口。
 
-安全性：模块本身不做开关判断，是否开放由路由层依据 `config.dev_sim_enabled()`
-（环境变量 `FARM_DEV_SIM=1`）决定；默认关闭，生产环境不要开。
+命令行用法见 `tools/simulate_device.py`：它把本模块当作库，自己负责鉴权与循环，
+服务端不提供 `/api/dev/*` 之类的测试接口。
 """
 
 import math
@@ -28,7 +30,7 @@ DEFAULT_INTERVAL_SECONDS = 60
 MIN_INTERVAL_SECONDS = 1
 MAX_INTERVAL_SECONDS = 3600
 
-#: 场景说明（给前端做按钮/帮助文案）
+#: 场景说明（给外部脚本做帮助文案）
 SCENARIO_META = {
     'normal': {
         'name': '常规运行',
@@ -67,6 +69,32 @@ def _wave(i: int, samples: int, amp: float, phase: float = 0.0) -> float:
     return amp * math.sin((ratio * 2.0 * math.pi) + phase)
 
 
+def clamp_samples(samples) -> int:
+    """把采样条数收敛到 [MIN_SAMPLES, MAX_SAMPLES]；缺失或非数字用默认值。
+
+    注意：`0` / 负数属于「显式给出的非法条数」，夹到下限 1；
+    只有 `None` 或无法解析为整数的值才回退 `DEFAULT_SAMPLES`。
+    """
+    if samples is None:
+        return DEFAULT_SAMPLES
+    try:
+        value = int(samples)
+    except (TypeError, ValueError):
+        return DEFAULT_SAMPLES
+    return max(MIN_SAMPLES, min(value, MAX_SAMPLES))
+
+
+def clamp_interval(interval) -> int:
+    """把采样间隔（秒）收敛到 [MIN_INTERVAL_SECONDS, MAX_INTERVAL_SECONDS]。"""
+    if interval is None:
+        return DEFAULT_INTERVAL_SECONDS
+    try:
+        value = int(interval)
+    except (TypeError, ValueError):
+        return DEFAULT_INTERVAL_SECONDS
+    return max(MIN_INTERVAL_SECONDS, min(value, MAX_INTERVAL_SECONDS))
+
+
 def build_series(scenario: str = 'normal', samples: int = DEFAULT_SAMPLES) -> list:
     """按场景生成遥测序列（列表元素为 MQTT 属性字典）。
 
@@ -74,7 +102,7 @@ def build_series(scenario: str = 'normal', samples: int = DEFAULT_SAMPLES) -> li
     `air_pump` / `water_pump` / `temperature` / `humidity_air`。
     """
     scenario = scenario if scenario in SCENARIOS else 'normal'
-    samples = max(MIN_SAMPLES, min(int(samples or DEFAULT_SAMPLES), MAX_SAMPLES))
+    samples = clamp_samples(samples)
     series = []
     for i in range(samples):
         progress = i / max(samples - 1, 1)
@@ -116,7 +144,7 @@ def build_series(scenario: str = 'normal', samples: int = DEFAULT_SAMPLES) -> li
 
 
 def describe_scenarios() -> list:
-    """返回场景清单（供前端渲染按钮与说明）。"""
+    """返回场景清单（供外部脚本打印帮助）。"""
     return [
         {'key': key, 'name': SCENARIO_META[key]['name'], 'desc': SCENARIO_META[key]['desc']}
         for key in SCENARIOS
@@ -125,21 +153,20 @@ def describe_scenarios() -> list:
 
 def run_simulation(uid, scenario: str = 'normal', samples: int = DEFAULT_SAMPLES,
                    interval: int = DEFAULT_INTERVAL_SECONDS, emit=None) -> dict:
-    """灌入一段模拟遥测，返回本次注入的概要。
+    """把一段模拟遥测灌进指定账号，返回本次注入的概要。
 
     参数:
         uid:      用户 id（该账号的历史库与看板都会看到这批数据）
         scenario: `SCENARIOS` 之一，非法值按 `normal` 处理
-        samples:  采样条数，自动夹到 1–240
-        interval: 相邻采样间隔（秒），自动夹到 1–3600
+        samples:  采样条数，夹到 1–240（None 用默认 24）
+        interval: 相邻采样间隔（秒），夹到 1–3600（None 用默认 60）
         emit:     前端推送函数；默认用 `realtime.emit_hw_data`，传 False 关闭
 
     返回: `{'scenario', 'samples', 'interval', 'first_ts', 'last_ts', 'latest'}`
     """
     scenario = scenario if scenario in SCENARIOS else 'normal'
-    samples = max(MIN_SAMPLES, min(int(samples or DEFAULT_SAMPLES), MAX_SAMPLES))
-    interval = max(MIN_INTERVAL_SECONDS, min(int(interval or DEFAULT_INTERVAL_SECONDS),
-                                             MAX_INTERVAL_SECONDS))
+    samples = clamp_samples(samples)
+    interval = clamp_interval(interval)
     series = build_series(scenario, samples)
 
     now_ms = int(time.time() * 1000)

@@ -104,9 +104,9 @@
             </div>
         </div>
 
-        <!-- 四路传感读数 -->
+        <!-- 田间实时数据：四路传感读数 + 两路泵状态（气泵在水泵之上） -->
         <div class="section panel-disabled" id="sensorPanel">
-            <div class="section-hd">田间四路读数</div>
+            <div class="section-hd">田间实时数据</div>
             <div class="section-bd">
                 <div class="sensor-grid">
                     <div class="sensor-cell sensor-cell--water">
@@ -240,8 +240,9 @@
                         </div>
                         <div class="dual-range-container">
                             <div class="dual-range-track"></div>
-                            <input type="range" id="humiDownInput" min="0" max="100" value="40" oninput="onHumiditySlider('down')">
-                            <input type="range" id="humiUpInput" min="0" max="100" value="80" oninput="onHumiditySlider('up')">
+                            <div class="dual-range-fill" aria-hidden="true"></div>
+                            <input type="range" id="humiDownInput" class="range-lo" min="0" max="100" value="40" oninput="onHumiditySlider('down')">
+                            <input type="range" id="humiUpInput" class="range-hi" min="0" max="100" value="80" oninput="onHumiditySlider('up')">
                         </div>
                     </div>
 
@@ -252,8 +253,9 @@
                         </div>
                         <div class="dual-range-container">
                             <div class="dual-range-track"></div>
-                            <input type="range" id="waterlevelDownInput" min="0" max="300" value="30" oninput="onWaterLevelSlider('down')">
-                            <input type="range" id="waterlevelUpInput" min="0" max="300" value="150" oninput="onWaterLevelSlider('up')">
+                            <div class="dual-range-fill" aria-hidden="true"></div>
+                            <input type="range" id="waterlevelDownInput" class="range-lo" min="0" max="300" value="30" oninput="onWaterLevelSlider('down')">
+                            <input type="range" id="waterlevelUpInput" class="range-hi" min="0" max="300" value="150" oninput="onWaterLevelSlider('up')">
                         </div>
                     </div>
 

@@ -124,9 +124,6 @@ FARM_POLYGON_MAX_LEN = 20000       #: 边界 JSON 字符串长度上限
 FARM_LAT_RANGE = (-90.0, 90.0)
 FARM_LON_RANGE = (-180.0, 180.0)
 
-#: 设备模拟器开关（无实物主板时演示用，默认关闭）：FARM_DEV_SIM=1 才开放
-DEV_SIM_ENV = 'FARM_DEV_SIM'
-
 # ============================================================
 # 五、传感器量程标定（与固件 esp.txt / 前端 index.html 保持一致）
 # ============================================================
@@ -199,15 +196,6 @@ def trust_proxy() -> bool:
     部署在 nginx / waitress 等反向代理之后，才设 `FARM_TRUST_PROXY=1`。
     """
     return os.environ.get('FARM_TRUST_PROXY', '0') == '1'
-
-
-def dev_sim_enabled() -> bool:
-    """设备模拟器是否开放（`FARM_DEV_SIM=1`）。
-
-    用于没有实物主板的演示/答辩场景：接口可注入一段带时间戳的遥测数据，
-    走与 MQTT 上报完全相同的处理链路。生产环境不要开。
-    """
-    return os.environ.get(DEV_SIM_ENV, '0') == '1'
 
 
 #: 未配置 FARM_SECRET_KEY 时生成的进程级随机密钥（首次调用时惰性创建，进程内复用）。

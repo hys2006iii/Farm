@@ -1,7 +1,9 @@
 """青禾智灌 —— 无实物主板的端到端自测脚本。
 
-不依赖 MQTT、不依赖外网、不需要提前启动服务端：用 Flask 测试客户端 +
-临时数据库把整条业务链路跑一遍，逐项打印 PASS/FAIL，最后给出汇总与退出码。
+不依赖 MQTT、不依赖外网、不需要提前启动服务端、**也不依赖任何系统内的测试接口**：
+用 Flask 测试客户端 + 临时数据库把整条业务链路跑一遍，逐项打印 PASS/FAIL，
+最后给出汇总与退出码。灌数走 `qinghe.simulate.run_simulation()`（外部联调通道），
+与真实 MQTT 上报共用 `iot.ingest_telemetry()` 链路。
 
 覆盖链路：
   注册 → 登录（含地块清单）→ 模拟设备上报（四路遥测 + 泵状态）
@@ -41,11 +43,10 @@ def check(name):
 
 
 def _client(tmpdir):
-    """构造绑定临时库、开启设备模拟器的测试客户端。"""
+    """构造绑定临时库的测试客户端（不依赖任何系统内测试接口）。"""
     os.environ['FARM_DB_PATH'] = os.path.join(tmpdir, 'selftest.db')
     os.environ['FARM_SECRET_KEY'] = 'selftest_secret_key_0123456789abcdef'
     os.environ['FARM_DEBUG'] = '0'
-    os.environ['FARM_DEV_SIM'] = '1'
     for module in [m for m in list(sys.modules) if m == 'qinghe' or m.startswith('qinghe.')]:
         del sys.modules[module]
     from qinghe import config, create_app
@@ -53,6 +54,12 @@ def _client(tmpdir):
     app, _socketio = create_app()
     app.config.update(TESTING=True)
     return app.test_client()
+
+
+def _current_uid(client):
+    """取当前会话的 user_id（供外部灌数通道直接使用）。"""
+    with client.session_transaction() as sess:
+        return sess.get('user_id')
 
 
 class Context:
@@ -74,6 +81,8 @@ class Context:
         body = resp.get_json()
         self.farm_id = body.get('active_farm_id')
         assert self.farm_id, '登录响应缺少 active_farm_id'
+        self.uid = _current_uid(self.client)
+        assert self.uid, '会话里没有 user_id'
         return body
 
 
@@ -88,13 +97,16 @@ def test_login(ctx):
 
 @check('模拟设备上报（常规场景 12 条）')
 def test_inject_normal(ctx):
-    """按常规场景灌 12 条遥测，应全部接收。"""
-    resp = ctx.client.post('/api/dev/simulate', json={
-        'scenario': 'normal', 'samples': 12, 'interval': 60})
-    assert resp.status_code == 200, '注数失败：%s %s' % (resp.status_code, resp.get_json())
-    body = resp.get_json()
-    assert body['samples'] == 12, '期望 12 条，实际 %s' % body['samples']
-    return 'scenario=%s，%s 条' % (body['scenario'], body['samples'])
+    """按常规场景灌 12 条遥测，应全部接收。
+
+    走的是外部联调通道：直接调用 `qinghe.simulate.run_simulation()`，
+    与真实 MQTT 上报共用 `iot.ingest_telemetry()` 链路，系统内无测试接口。
+    """
+    from qinghe import simulate
+
+    result = simulate.run_simulation(ctx.uid, 'normal', samples=12, interval=60, emit=False)
+    assert result['samples'] == 12, '期望 12 条，实际 %s' % result['samples']
+    return 'scenario=%s，%s 条' % (result['scenario'], result['samples'])
 
 
 @check('历史落库含 DO / Eh 四路数据')
@@ -142,8 +154,9 @@ def test_advice(ctx):
 @check('服务端告警（缺氧场景产生告警）')
 def test_alerts(ctx):
     """缺氧场景应产生 rori_high 告警并可被查询/确认。"""
-    ctx.client.post('/api/dev/simulate', json={
-        'scenario': 'anaerobic', 'samples': 6, 'interval': 60})
+    from qinghe import simulate
+
+    simulate.run_simulation(ctx.uid, 'anaerobic', samples=6, interval=60, emit=False)
     resp = ctx.client.get('/api/alerts?limit=50')
     assert resp.status_code == 200
     body = resp.get_json()
@@ -229,12 +242,6 @@ def test_knowledge(ctx):
     body = resp.get_data(as_text=True)
     assert len(body) > 1000, '知识库页面内容过少'
     return 'knowledge.html 渲染 %d 字符' % len(body)
-
-
-def _current_uid(client):
-    """从会话里取当前用户 id。"""
-    with client.session_transaction() as sess:
-        return sess.get('user_id')
 
 
 def _fmt(value):

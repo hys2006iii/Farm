@@ -1,5 +1,5 @@
 /* ============================================================
- * farm.js — 多地块：顶栏切换器 / 设置页地块管理 / 地图选点与圈地 / 演示数据
+ * farm.js — 多地块：顶栏切换器 / 设置页地块管理 / 地图选点与圈地
  *
  * 依赖：core.js 的 QH，Leaflet（可缺失，缺失时降级为手填经纬度）
  * 治理点：
@@ -418,40 +418,10 @@
         });
     }
 
-    /* ---------------- 演示数据 ---------------- */
-    function checkDevSim() {
-        api('/api/dev/scenarios').then(function (data) {
-            var block = QH.$('simBlock');
-            if (block && data && data.status === 'success') block.hidden = false;
-        }).catch(function () { /* 未开启演示接口时保持隐藏 */ });
-    }
-
-    function runSimulation() {
-        var scenarioEl = QH.$('simScenario');
-        var samplesEl = QH.$('simSamples');
-        var hint = QH.$('simHint');
-        var scenario = scenarioEl ? scenarioEl.value : 'normal';
-        var samples = samplesEl ? num(samplesEl.value) : 48;
-        var btn = QH.$('simRunBtn');
-        if (btn) btn.disabled = true;
-        if (hint) QH.setText(hint, '正在灌入…');
-        api('/api/dev/simulate', { scenario: scenario, samples: samples || 48 }).then(function (data) {
-            if (hint) QH.setText(hint, (data && data.message) || '演示数据已灌入');
-            QH.toast('演示数据已灌入，看板将刷新', 'success');
-            setTimeout(function () { root.location.reload(); }, 900);
-        }).catch(function (err) {
-            if (hint) QH.setText(hint, '灌入失败：' + err.message);
-            QH.toast('演示数据灌入失败：' + err.message, 'danger');
-        }).then(function () {
-            if (btn) btn.disabled = false;
-        });
-    }
-
     /* ---------------- 生命周期 ---------------- */
     function onSettingsOpen() {
         ensureMap();
         setMapMode(state.mode);
-        checkDevSim();
         loadFarms().then(function () {
             updateSummary();
             if (state.map && state.farms.length) {
@@ -496,7 +466,6 @@
         setMapMode: setMapMode,
         undoPolyPoint: undoPolyPoint,
         clearPoly: clearPoly,
-        runSimulation: runSimulation,
         polygonArea: polygonArea,
         areaText: areaText,
         state: state
