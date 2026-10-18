@@ -32,7 +32,6 @@
         alerts: [],
         dirty: { trend: false, logs: false, alerts: false }
     };
-    root.QH_STORE_MEM = mem;
 
     /* ---------------- 低层读写 ---------------- */
     function readJSON(key, fallback) {

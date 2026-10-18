@@ -73,15 +73,6 @@
         el.textContent = text;
     }
 
-    /** 写属性：值未变化则不写 */
-    function setAttr(el, name, value) {
-        if (!el) return;
-        var key = '__qhAttr_' + name;
-        if (el[key] === value) return;
-        el[key] = value;
-        el.setAttribute(name, value);
-    }
-
     /** 写样式：值未变化则不写 */
     function setStyle(el, prop, value) {
         if (!el) return;
@@ -122,14 +113,12 @@
      */
     var pending = {
         fields: {},   // 传感器数值：key -> 文本
-        styles: {},   // 元素样式：key -> [prop, value]
         pumps: {},    // 泵状态：elId -> 原始值
         flags: {},    // 布尔状态
         sliders: {}   // 阈值滑杆：type -> value
     };
 
     function enqueueField(key, value) { pending.fields[key] = value; }
-    function enqueueStyle(key, prop, value) { pending.styles[key] = [prop, value]; }
     function enqueuePump(elId, rawVal) { pending.pumps[elId] = rawVal; }
     function enqueueFlag(key, value) { pending.flags[key] = value; }
     function enqueueSlider(kind, type, value) { pending.sliders[kind + ':' + type] = value; }
@@ -143,15 +132,9 @@
 
     /** 把队列里的变更一次性刷进 DOM */
     function flushDom() {
-        var k, v;
+        var k;
         for (k in pending.fields) {
             if (Object.prototype.hasOwnProperty.call(pending.fields, k)) setText($(k), pending.fields[k]);
-        }
-        for (k in pending.styles) {
-            if (Object.prototype.hasOwnProperty.call(pending.styles, k)) {
-                v = pending.styles[k];
-                setStyle($(k), v[0], v[1]);
-            }
         }
         for (k in pending.pumps) {
             if (Object.prototype.hasOwnProperty.call(pending.pumps, k)) {
@@ -171,7 +154,7 @@
             }
         }
         var flags = pending.flags;
-        pending = { fields: {}, styles: {}, pumps: {}, flags: {}, sliders: {} };
+        pending = { fields: {}, pumps: {}, flags: {}, sliders: {} };
         if (flags.refreshStatus) refreshStatus();
         if (flags.rori) updateRori();
         if (flags.alerts) checkAlerts();
@@ -220,21 +203,15 @@
         if (tickTimer) { clearInterval(tickTimer); tickTimer = null; }
     }
 
-    /* ================= 事件绑定（点击/键盘） ================= */
-    function bindDelegates() {
-        // 弹窗遮罩点击关闭：拆分前无此行为，保持一致性故不启用
-        // 这里仅统一处理需要防重复提交的按钮
-    }
-
     root.QH = {
         esc: esc, fmtTime: fmtTime, pad2: pad2, $: $,
-        setText: setText, setAttr: setAttr, setStyle: setStyle, toggleClass: toggleClass,
+        setText: setText, setStyle: setStyle, toggleClass: toggleClass,
         toast: toast, openModal: openModal, closeModal: closeModal,
-        enqueueField: enqueueField, enqueueStyle: enqueueStyle,
+        enqueueField: enqueueField,
         enqueuePump: enqueuePump, enqueueFlag: enqueueFlag, enqueueSlider: enqueueSlider,
         flushDom: flushDom, pumpPresentation: pumpPresentation,
         registerTask: registerTask, startTicker: startTicker, stopTicker: stopTicker,
-        bindDelegates: bindDelegates, TICK_MS: TICK_MS
+        TICK_MS: TICK_MS
     };
 
     // 浏览器全局别名：模板内联 onclick 与跨脚本调用需要
