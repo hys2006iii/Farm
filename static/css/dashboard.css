@@ -370,6 +370,10 @@
     padding: 10px 16px 11px;
     background: var(--paper-2); border: 1px solid var(--line);
     border-right-width: 0;
+    /* 卡片高度由「标签 + 数值 + 固定两行副标题」定死，内部再把三段纵向撑开：
+       标签贴顶、数值居中偏上、副标题贴底。这样文案只有一行时底部不会空一截，
+       四张卡看起来是「铺满」的，而外框尺寸与位置一分不变。 */
+    display: flex; flex-direction: column;
 }
 .kpi:last-child { border-right-width: 1px; }
 .kpi-label {
@@ -379,11 +383,12 @@
 .kpi-value {
     margin-top: 2px; font-size: 21px; line-height: 1.25;
     font-family: var(--font-serif); color: var(--ink); letter-spacing: 0.02em;
+    margin-bottom: auto;
 }
 .kpi-sub {
     margin-top: 2px; font-size: 11px; color: var(--ink-3); line-height: 1.5;
     /* 11px × 1.5 = 16.5px/行，锁两行 = 33px。文案再长也换行显示、不撑高卡片。 */
-    height: 33px; overflow: hidden;
+    height: 33px; overflow: hidden; flex: 0 0 auto;
 }
 
 /* ===== 七日建议 ===== */
