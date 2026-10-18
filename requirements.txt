@@ -19,3 +19,5 @@ requests>=2.31
 
 # --- Testing ---
 pytest>=8.0
+# 浏览器验收脚本 tools/visual_check.py 用 CDP 驱动 headless Edge（可选；缺了只影响该脚本）
+websocket-client>=1.6
