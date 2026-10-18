@@ -79,6 +79,7 @@ def reset_login_failures() -> None:
     """清空全部限流状态（测试用）。"""
     with _login_lock:
         _login_fail.clear()
+    reset_register_attempts()
 
 
 # ------------------------------------------------------------
@@ -101,6 +102,45 @@ def record_login_failure(username: str) -> None:
 def clear_login_failures(username: str) -> None:
     """登录成功后清空该「用户名 + 来源 IP」的失败计数。"""
     _clear_login_fail(username)
+
+
+#: 注册尝试计数 {ip: (count, last_ts)}：注册不需要用户名，按来源 IP 限流
+_register_attempts = {}
+_register_lock = threading.Lock()
+
+
+def register_throttle() -> bool:
+    """该来源 IP 在限流窗口内的注册尝试是否已超上限。
+
+    注册接口本身无凭据可验证，若不限流可被脚本批量建号打满数据库。
+    """
+    ip = _client_ip()
+    with _register_lock:
+        entry = _register_attempts.get(ip)
+        if not entry:
+            return False
+        count, ts = entry
+        if time.time() - ts > config.LOGIN_LOCK_SECONDS:
+            _register_attempts.pop(ip, None)
+            return False
+        return count >= config.REGISTER_MAX_ATTEMPTS
+
+
+def record_register_attempt() -> None:
+    """记录一次注册尝试（窗口内累加，窗口外重新计数）。"""
+    ip = _client_ip()
+    with _register_lock:
+        entry = _register_attempts.get(ip)
+        if entry and time.time() - entry[1] <= config.LOGIN_LOCK_SECONDS:
+            _register_attempts[ip] = (entry[0] + 1, time.time())
+        else:
+            _register_attempts[ip] = (1, time.time())
+
+
+def reset_register_attempts() -> None:
+    """清空注册限流状态（测试用）。"""
+    with _register_lock:
+        _register_attempts.clear()
 
 
 def is_password_hash(stored: str) -> bool:

@@ -99,7 +99,7 @@ def fetch_forecast(domain: str, lng, lat, key: str) -> dict:
     try:
         r = requests.get(url, timeout=config.TIMEOUT_WEATHER)
     except Exception as e:
-        return {'code': 'ERR', 'error': '天气接口请求失败: %s' % str(e)}
+        return {'code': 'ERR', 'error': '天气接口请求失败: %s（网络不可达或超时）' % type(e).__name__}
     try:
         return r.json()
     except Exception:

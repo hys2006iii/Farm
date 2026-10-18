@@ -24,6 +24,11 @@ def notify_webhook(uid: int, title: str, content: str) -> bool:
     url = (cfg['webhook_url'] or '').strip()
     if not (url.startswith('http://') or url.startswith('https://')):
         return False
+    # 防 SSRF：webhook 由用户配置，不能用来让服务端访问本机 / 内网 / 云元数据
+    from qinghe.ai import is_public_http_url
+
+    if not is_public_http_url(url):
+        return False
     text = '%s%s\n%s' % (ALERT_KEYWORD, title, content)
     payload = {'msgtype': 'text', 'text': {'content': text}}
     try:

@@ -5,6 +5,8 @@
 `{'choices': [{'message': {'content': '...'}}]}` 结构，绝不向请求栈抛异常。
 """
 
+import ipaddress
+
 import requests
 
 from qinghe import config, db
@@ -208,6 +210,43 @@ def build_chat_request(ai_domain, user_msg: str):
     return url, headers, body
 
 
+def is_public_http_url(url: str) -> bool:
+    """判断 URL 是否为 http(s) 且主机不是本机/私网/链路本地/元数据地址。
+
+    只做主机字面量与常见内网域名判断，不做 DNS 解析：既避免校验与实际连接
+    解析结果不一致（DNS rebinding），也避免测试环境被迫联网。非法 URL 视为
+    不安全。用于阻断「把 ai_domain 指到 127.0.0.1 / 169.254.169.254 从而让
+    服务端替调用方访问内网」的 SSRF 路径。
+    """
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme not in ('http', 'https') or not parsed.hostname:
+        return False
+    host = parsed.hostname.strip('[]').lower()
+    if host in ('localhost', 'localhost.localdomain') or host.endswith(
+            ('.local', '.internal', '.localhost', '.lan', '.home')):
+        return False
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return True
+    return bool(
+        ip.is_global
+        and not (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        )
+    )
+
+
 def chat(ai_domain, ai_key, user_msg: str, context: str = None) -> dict:
     """调用 AI 接口并返回可直接 jsonify 的 dict。
 
@@ -216,6 +255,9 @@ def chat(ai_domain, ai_key, user_msg: str, context: str = None) -> dict:
                  固定系统提示之后、用户提问之前，让模型带着实时读数作答。
     """
     url, headers, body = build_chat_request(ai_domain, user_msg)
+    # 防 SSRF：ai_domain 由用户配置，不能被用来让服务端访问本机/内网/云元数据
+    if not is_public_http_url(url):
+        return _wrap('AI 域名不允许指向本机或内网地址，请在设置中填写公开可访问的 https 地址')
     if context:
         body['messages'].insert(1, {'role': 'system', 'content': context})
     headers['Authorization'] = 'Bearer %s' % ai_key

@@ -11,6 +11,29 @@ from qinghe import auth, config, db, iot, validators
 bp = Blueprint('auth_api', __name__)
 
 
+def _json_body():
+    """解析 JSON 对象请求体；非对象返回 (None, 400 响应)。"""
+    try:
+        return validators.get_json_object(request), None
+    except validators.ValidationError as exc:
+        return None, (jsonify({'status': 'error', 'message': exc.message}), exc.status)
+
+
+def _connect_iot_async(uid):
+    """后台线程建立 MQTT 连接：华为云不可达时 connect() 最长阻塞 60s，不能占请求线程。"""
+    import threading
+
+    try:
+        threading.Thread(
+            target=iot.connect_huawei_iot,
+            args=(uid,),
+            name='iot-app-login-%s' % uid,
+            daemon=True,
+        ).start()
+    except Exception:  # noqa: BLE001 - 连接失败不影响登录发 token
+        pass
+
+
 @bp.route('/api/register', methods=['POST'])
 def api_register():
     """注册新账号：校验用户名/密码长度，成功后同时初始化 configs 行。
@@ -18,7 +41,12 @@ def api_register():
     入参非法（类型错误 / 长度越界 / 账号已存在）返回 **400**，响应体形状
     仍为 `{'status': 'error', 'message': ...}` 不变；成功 200 + `success`。
     """
-    data = request.json or {}
+    data, error = _json_body()
+    if error:
+        return error
+    if auth.register_throttle():
+        return jsonify({'status': 'error', 'message': '注册过于频繁，请 10 分钟后再试'}), 429
+    auth.record_register_attempt()
     try:
         username = validators.as_stripped(data, 'username')
         password = validators.as_str(data, 'password')
@@ -42,7 +70,9 @@ def api_login():
     入参缺失 / 类型错误返回 **400**、凭据错误返回 **401**、账号锁定中返回 **429**；
     三者响应体形状均为 `{'status': 'error', 'message': ...}` 不变。
     """
-    data = request.json or {}
+    data, error = _json_body()
+    if error:
+        return error
     try:
         username = validators.as_stripped(data, 'username')
         password = validators.as_str(data, 'password')
@@ -88,7 +118,9 @@ def api_change_password():
     """
     if 'user_id' not in session:
         return jsonify({'status': 'error', 'message': '未授权'}), 401
-    data = request.json or {}
+    data, error = _json_body()
+    if error:
+        return error
     uid = session['user_id']
     try:
         old_password = validators.as_str(data, 'old_password')
@@ -101,6 +133,8 @@ def api_change_password():
     if not user or not auth.verify_password(user['password'], old_password):
         return jsonify({'status': 'error', 'message': '原密码错误'}), 400
     db.update_password(uid, auth.hash_password(new_password))
+    # 改密后立即作废旧会话：否则旧 Cookie / 其它设备仍能继续操作
+    session.clear()
     return jsonify({'status': 'success', 'message': '密码修改成功，请重新登录'})
 
 
@@ -110,7 +144,9 @@ def api_app_login():
 
     入参类型错误返回 400，凭据错误返回 401，锁定中返回 429。
     """
-    payload = request.json or {}
+    payload, error = _json_body()
+    if error:
+        return error
     try:
         username = validators.as_stripped(payload, 'username')
         password = validators.as_str(payload, 'password')
@@ -122,7 +158,7 @@ def api_app_login():
     if ok:
         auth.clear_login_failures(username)
         token = auth.issue_token(user['id'])
-        iot.connect_huawei_iot(user['id'])
+        _connect_iot_async(user['id'])
         return jsonify({
             'status': 'success',
             'message': '登录成功',
