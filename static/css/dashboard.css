@@ -188,7 +188,8 @@
 .thresh-val .lo { color: var(--gold); font-weight: 700; }
 .thresh-val .hi { color: var(--jade); font-weight: 700; }
 
-/* 双滑杆：轨道是一条“量程尺”，两端刻度用虚线补齐 */
+/* 双滑杆：轨道是一条“量程尺”，两端刻度用虚线补齐；
+   两柄之间（已选区间）用玉青实底 + 两端赭金描边，一眼看出设定区间 */
 .dual-range-container {
     position: relative; width: 100%; height: 30px;
     display: flex; align-items: center; margin-top: 2px;
@@ -198,6 +199,16 @@
     position: absolute; left: 9px; right: 9px; height: 4px;
     background: var(--paper-3);
     border-top: 1px solid var(--line-2); border-bottom: 1px solid var(--line-2);
+}
+
+/* 已选区间：由 config.js 的 updateDualRangeFill() 写入 left/width 百分比 */
+.dual-range-fill {
+    position: absolute; left: 40%; width: 40%; top: 50%; height: 8px;
+    transform: translateY(-50%);
+    background: var(--jade);
+    border-left: 2px solid var(--gold);
+    border-right: 2px solid var(--gold);
+    pointer-events: none;
 }
 
 .dual-range-container input[type=range] {
@@ -220,6 +231,20 @@
     background: var(--paper-2); border: 1px solid var(--ink-2);
     pointer-events: auto; cursor: ew-resize;
 }
+
+/* 手柄区分：下限=赭金，上限=玉青（webkit 走 box-shadow 内描边，firefox 直接改边框） */
+.dual-range-container input.range-lo::-webkit-slider-thumb {
+    border-color: var(--gold);
+    box-shadow: inset 0 0 0 3px var(--gold), inset 0 0 0 4px var(--paper-2);
+}
+.dual-range-container input.range-hi::-webkit-slider-thumb {
+    border-color: var(--jade);
+    box-shadow: inset 0 0 0 3px var(--jade), inset 0 0 0 4px var(--paper-2);
+}
+.dual-range-container input.range-lo::-moz-range-thumb { border-color: var(--gold); background: var(--gold-pale); }
+.dual-range-container input.range-hi::-moz-range-thumb { border-color: var(--jade); background: var(--jade-pale); }
+.dual-range-container input.range-lo::-webkit-slider-thumb:hover { border-color: #7A6128; }
+.dual-range-container input.range-hi::-webkit-slider-thumb:hover { border-color: var(--jade-2); }
 
 /* ===== 趋势图：两张并排 + 一张通栏 ===== */
 .trend-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -245,10 +270,13 @@
 }
 .rori-approx-note:not([hidden]) { display: block; }
 
-/* ===== 日志：固定视窗内滚动，不撑破卡片 ===== */
+/* ===== 日志：固定视窗内滚动，不撑破卡片；
+   右列第 2 行有富余高度时随卡片一起长高（.log-stretch 由 base.css 撑满 1fr 行） ===== */
 .log-stretch { flex: 0 0 auto; }
 .log-stretch .section-bd { padding-bottom: 8px; }
 .log-stretch .log-scroll { height: 236px; overflow-y: auto; }
+/* 看板右列：日志卡片撑满剩余行高，滚动区跟着长高，不再留大片空白 */
+.right-col > .log-stretch .log-scroll { height: auto; min-height: 236px; }
 .log-item { border-left-width: 2px; padding: 5px 8px 5px 10px; }
 .log-item .log-time { font-variant-numeric: tabular-nums; }
 .log-item .log-msg { font-size: 12.5px; }

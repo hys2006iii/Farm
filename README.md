@@ -48,11 +48,11 @@
 | F3 | AI 实时快照 | 每次提问自动附带服务端快照（四路读数、RORI、阈值、近 40 条趋势、6 日雨情），无数据时明写「暂无」不编造 |
 | F4 | 七日灌溉建议 | 逐日给出「灌溉 / 等雨 / 观察 / 维持」，概览卡与看板联动；RORI 偏高时并给增氧提示 |
 | F5 | 知识库页面 | `GET /knowledge`：灌溉基础、DO/Eh 氧环境、怎么看天看地、系统内核、操作问答五章 |
-| F6 | 设备模拟与自测 | `tools/simulate_device.py` 灌数（normal/drought/anaerobic/storm 四场景）；`tools/selftest_no_hardware.py` 12 项自检，无实物主板也能验收 |
+| F6 | 无硬件联调与自测 | `tools/simulate_device.py` 以外部工具身份灌数（normal/drought/anaerobic/storm 四场景）；`tools/selftest_no_hardware.py` 12 项自检，无实物主板也能验收。**灌数能力只存在于仓库外部代码，系统界面与 HTTP 接口里没有任何测试/演示入口** |
 | F7 | 遥测快照恢复 | `GET /api/telemetry`：刷新页面/切回前台时补一帧服务端最新遥测，不再出现「读数空白但图表有数据」 |
 
-第二批新增 9 个路径（`/api/farms` ×5、`/api/advice/calendar`、`/api/dev/*` ×2、`/api/telemetry`、`/knowledge`），
-`/api/dev/*` 需以 `FARM_DEV_SIM=1` 启动才开放，生产环境默认关闭（404）。
+第二批新增 8 个路径（`/api/farms` ×5、`/api/advice/calendar`、`/api/telemetry`、`/knowledge`）。
+设备联调**不占用系统接口**：`qinghe/simulate.py` 只作为库被仓库外脚本调用（见 `tools/simulate_device.py`）。
 
 ### 4. 第三轮加固（稳定性、安全与离线可用）
 
@@ -123,7 +123,6 @@ python tools/gen_secret.py          # 生成随机密钥，写入 .env 提示值
 | `HOST` | `0.0.0.0` | 监听地址 |
 | `FARM_DEBUG` | `0` | 生产必须为 `0` |
 | `FARM_THREADS` | `8` | waitress 工作线程数 |
-| `FARM_DEV_SIM` | `0` | 设为 `1` 才开放 `/api/dev/*` 设备模拟接口（演示/自测用，生产保持 `0`） |
 | `FARM_TRUST_PROXY` | `0` | 置 `1` 才信任 `X-Forwarded-For`（仅在反向代理后使用） |
 
 ### 3. 开发模式运行
@@ -162,11 +161,15 @@ npm run test:js                     # 前端纯函数（node --test，需 Node 1
 
 ```bash
 python tools/selftest_no_hardware.py -v            # 12 项端到端自检（临时库，不用起服务）
-python tools/simulate_device.py --list             # 四类演示场景：normal/drought/anaerobic/storm
-python tools/simulate_device.py --scenario anaerobic --samples 48
+python tools/simulate_device.py --list             # 四类联调场景：normal/drought/anaerobic/storm
+python tools/simulate_device.py --username farmer01 --password secret123 \
+       --scenario anaerobic --samples 48           # 本机直连灌数（走真实遥测链路）
 ```
 
-`simulate_device.py` 通过 HTTP 往运行中的服务灌数据，需服务端以 `FARM_DEV_SIM=1` 启动；
+`simulate_device.py` 是**仓库外部工具**：直接调用 `qinghe.simulate.run_simulation()`
+把遥测灌进指定账号，与真实 ESP32-E 上报共用 `iot.ingest_telemetry()` 链路
+（历史落库 / 心跳 / RORI / 泵时长 / 自动调控 / 告警 / 前端推送）。
+系统本身不提供任何测试接口——界面里没有"演示数据"入口，`/api/dev/*` 一律 404。
 `selftest_no_hardware.py` 自带 Flask 测试客户端，注册→上报→落库→告警→导出→多地块全链路跑一遍。
 
 ---
@@ -194,9 +197,9 @@ Farm/
 │  ├─ metrics.py          # NF5 节水减碳核算
 │  ├─ autocontrol.py      # NF6 自动调控
 │  ├─ advice.py           # 七日灌溉建议（纯函数）
-│  ├─ simulate.py         # 四场景遥测生成与回放
+│  ├─ simulate.py         # 外部联调用的四场景遥测发生器（系统内无入口）
 │  ├─ realtime.py         # SocketIO 事件与设备状态推送
-│  └─ routes/             # 11 个蓝图：app/auth/config/data/ai/insight/export/monitor/farm/advice/dev
+│  └─ routes/             # 10 个蓝图：app/auth/config/data/ai/insight/export/monitor/farm/advice
 ├─ templates/             # index.html / login.html / knowledge.html
 ├─ static/                # css/ + js/ 前端资源
 ├─ tests/                 # pytest 用例 + js/ 前端用例

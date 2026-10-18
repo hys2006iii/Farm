@@ -95,7 +95,7 @@
                 ['，α=', 0], [String(dt.alpha), 1],
                 ['；动态土壤湿度阈值 下限 ', 0], [dt.effLower.toFixed(1) + '%', 1],
                 [' / 上限 ', 0], [dt.effUpper.toFixed(1) + '%', 1],
-                ['，已与 RORI 风险联动。', 0]
+                ['。', 0]
             ];
         } else {
             parts = [

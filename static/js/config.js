@@ -8,6 +8,49 @@
     var S = root.S;
 
     /* ---------------- 滑块 ---------------- */
+    /**
+     * 双滑杆「已选区间」几何：把两个数值换算成轨道上的百分比。
+     * 纯函数，无 DOM 依赖，供 QH_CONFIG 导出并被 node 测试直接调用。
+     * @param {number|string} lower 下限
+     * @param {number|string} upper 上限
+     * @param {number} [min=0] 量程最小值
+     * @param {number} [max=100] 量程最大值
+     * @returns {{left:number,width:number}} left/width 均为 0–100 的百分比
+     */
+    function dualRangeGeometry(lower, upper, min, max) {
+        var lo0 = isFinite(parseFloat(min)) ? parseFloat(min) : 0;
+        var hi0 = isFinite(parseFloat(max)) ? parseFloat(max) : 100;
+        if (hi0 <= lo0) hi0 = lo0 + 1;
+        var span = hi0 - lo0;
+        var toPct = function (v, fallback) {
+            var n = parseFloat(v);
+            if (!isFinite(n)) n = fallback;
+            n = Math.min(hi0, Math.max(lo0, n));
+            return (n - lo0) / span * 100;
+        };
+        var a = toPct(lower, lo0);
+        var b = toPct(upper, hi0);
+        if (b < a) { var t = a; a = b; b = t; }
+        return { left: a, width: b - a };
+    }
+
+    /**
+     * 把「已选区间」高亮条写到对应的 .dual-range-fill 上。
+     * 节点缺失时静默返回，便于 node/无 DOM 环境复用。
+     * @param {string} downId 下限 input 的 id
+     * @param {string} upId 上限 input 的 id
+     */
+    function updateDualRangeFill(downId, upId) {
+        var d = QH.$(downId), u = QH.$(upId);
+        if (!d || !u) return;
+        var box = d.parentNode;
+        var fill = box && box.querySelector ? box.querySelector('.dual-range-fill') : null;
+        if (!fill) return;
+        var geo = dualRangeGeometry(d.value, u.value, d.min, d.max);
+        fill.style.left = geo.left + '%';
+        fill.style.width = geo.width + '%';
+    }
+
     /** 土壤湿度双滑块联动（下限不得越过上限） */
     function onHumiditySlider(type) {
         var d = QH.$('humiDownInput'), u = QH.$('humiUpInput');
@@ -18,6 +61,7 @@
         if (type === 'up' && uv < dv) { u.value = dv; }
         QH.setText(QH.$('humiDownVal'), d.value);
         QH.setText(QH.$('humiUpVal'), u.value);
+        updateDualRangeFill('humiDownInput', 'humiUpInput');
         root.updateThresholdFusionHint();
     }
 
@@ -31,6 +75,7 @@
         if (type === 'up' && uv < dv) { u.value = dv; }
         QH.setText(QH.$('waterlevelDownVal'), d.value);
         QH.setText(QH.$('waterlevelUpVal'), u.value);
+        updateDualRangeFill('waterlevelDownInput', 'waterlevelUpInput');
         root.updateThresholdFusionHint();
     }
 
@@ -119,6 +164,8 @@
             QH.setText(QH.$('humiUpVal'), d.humi_up);
             QH.setText(QH.$('waterlevelDownVal'), d.waterlevel_down);
             QH.setText(QH.$('waterlevelUpVal'), d.waterlevel_up);
+            updateDualRangeFill('humiDownInput', 'humiUpInput');
+            updateDualRangeFill('waterlevelDownInput', 'waterlevelUpInput');
             root.updateThresholdFusionHint();
             // 恢复模式：若后端存的是手动模式，则进入手动状态
             if (d.manual_mode && !S.manualMode) {
@@ -200,6 +247,8 @@
     root.QH_CONFIG = {
         onHumiditySlider: onHumiditySlider,
         onWaterLevelSlider: onWaterLevelSlider,
+        dualRangeGeometry: dualRangeGeometry,
+        updateDualRangeFill: updateDualRangeFill,
         loadConfig: loadConfig,
         saveConfig: saveConfig,
         changePassword: changePassword,
@@ -212,6 +261,10 @@
     // 模板内联 onclick 需要的全局
     root.onHumiditySlider = onHumiditySlider;
     root.onWaterLevelSlider = onWaterLevelSlider;
+    // node 环境（无 window）下直接取用，便于 tests/js/config.test.mjs 单测纯函数
+    if (typeof module !== 'undefined' && module.exports) {
+        module.exports = { dualRangeGeometry: dualRangeGeometry };
+    }
     root.saveConfig = saveConfig;
     root.changePassword = changePassword;
     root.toggleMode = toggleMode;

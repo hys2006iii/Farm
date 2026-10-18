@@ -120,17 +120,50 @@ body {
     display: flex; align-items: center; white-space: nowrap;
 }
 
-/* ===== 主布局 ===== */
+/* ===== 主布局 =====
+   需求：左列「田间实时数据」卡片与右列「调控与阈值」卡片底边齐平。
+   两列卡片数量不同（左 4 张、右 2 张），用列内 grid + 显式行轨道对齐：
+   .left-col 与 .right-col 共用同一条「对齐行」——左列第 2 行、右列第 1 行，
+   两张卡都设 align-self: stretch，行高取二者较大值，底边自然齐平。 */
 .main-wrap {
     flex: 1; padding: 20px 26px 18px;
-    display: grid; grid-template-columns: 7fr 5fr; gap: 18px;
+    display: grid; grid-template-columns: 7fr 5fr; grid-template-rows: auto 1fr; gap: 18px;
     max-width: 1560px; margin: 0 auto; width: 100%;
 }
-.left-col, .right-col { display: flex; flex-direction: column; min-width: 0; }
+.left-col, .right-col { display: grid; gap: 18px; align-content: start; min-width: 0; }
+/* 左列：小气候 auto / 读数卡 auto（与右列调控卡等高）/ 其余 1fr */
+.left-col { grid-template-rows: auto auto 1fr 1fr; }
+.right-col { grid-template-rows: auto 1fr; }
+/* 列内卡片间距一律交给 grid gap，避免 margin 与 gap 叠加成 36px */
+.left-col > .section, .right-col > .section { margin-bottom: 0; }
+/* 读数卡与调控卡各自撑满所在行 → 两列该行等高、底边齐平 */
+.left-col > #sensorPanel,
+.right-col > #controlPanel { align-self: stretch; }
+/* 调控卡内部纵向撑开，让「应用参数」贴住卡片底边收口 */
+.right-col > #controlPanel { display: flex; flex-direction: column; }
+.right-col > #controlPanel > .section-bd { flex: 1 1 auto; display: flex; flex-direction: column; }
+.right-col > #controlPanel > .section-bd > #autoThresholdArea { display: flex; flex-direction: column; flex: 1 1 auto; }
+.right-col > #controlPanel > .section-bd > #autoThresholdArea > .btn-wide:last-child { margin-top: auto; }
 .section.full-span { grid-column: 1 / -1; }
-.section.log-stretch { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
-.section.log-stretch .section-bd { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
-.section.log-stretch .log-scroll { flex: 1 1 0; height: auto; min-height: 0; overflow-y: auto; }
+/* 运行日志占满第 2 行剩余高度，内部滚动区自适应 */
+.right-col > .log-stretch { min-height: 0; display: flex; flex-direction: column; }
+.right-col > .log-stretch > .section-bd { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
+.right-col > .log-stretch .log-scroll { flex: 1 1 0; height: auto; min-height: 0; overflow-y: auto; }
+/* 列内卡片间距一律交给 grid gap，避免 margin 与 gap 叠加成 36px */
+.left-col > .section, .right-col > .section { margin-bottom: 0; }
+/* 读数卡与调控卡各自撑满所在行 → 两列该行等高、底边齐平 */
+.left-col > #sensorPanel,
+.right-col > #controlPanel { align-self: stretch; }
+/* 调控卡内部纵向撑开，让「应用参数」贴住卡片底边收口 */
+.right-col > #controlPanel { display: flex; flex-direction: column; }
+.right-col > #controlPanel > .section-bd { flex: 1 1 auto; display: flex; flex-direction: column; }
+.right-col > #controlPanel > .section-bd > #autoThresholdArea { display: flex; flex-direction: column; flex: 1 1 auto; }
+.right-col > #controlPanel > .section-bd > #autoThresholdArea > .btn-wide:last-child { margin-top: auto; }
+.section.full-span { grid-column: 1 / -1; }
+/* 运行日志占满第 2 行剩余高度，内部滚动区自适应 */
+.right-col > .log-stretch { min-height: 0; display: flex; flex-direction: column; }
+.right-col > .log-stretch > .section-bd { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
+.right-col > .log-stretch .log-scroll { flex: 1 1 0; height: auto; min-height: 0; overflow-y: auto; }
 
 /* ===== 区块：纸卡片 ===== */
 .section {
@@ -294,8 +327,10 @@ body {
 .hidden { display: none !important; }
 
 /* ===== 响应式 ===== */
+/* 窄屏改单列后，两列各自独占一行，第 1 行同高约束自动失效，不会塌陷 */
 @media (max-width: 900px) {
-    .main-wrap { grid-template-columns: 1fr; padding: 14px; }
+    .main-wrap { grid-template-columns: 1fr; grid-template-rows: none; padding: 14px; }
+    .left-col, .right-col { grid-template-rows: none; align-content: start; }
     .topbar { padding: 8px 14px; gap: 8px; }
     .topbar-btn { padding: 5px 9px; font-size: 11.5px; letter-spacing: 0.04em; }
     .status-col { display: none; }
