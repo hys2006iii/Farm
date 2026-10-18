@@ -350,12 +350,11 @@
         </div>
 
         <!-- 地块管理：气象监测点 / 边界设置 + 多地块增删改切 -->
-        <div class="cfg-block">
-            <div class="cfg-block" id="farmBlock">
-                <div class="cfg-block-hd">
-                    <h3>地块管理</h3>
-                    <span class="cfg-block-sub">一个账号可以管多块地，看板与 AI 都按「当前地块」计算</span>
-                </div>
+        <div class="cfg-block" id="farmBlock">
+            <div class="cfg-block-hd">
+                <h3>地块管理</h3>
+                <span class="cfg-block-sub">一个账号可以管多块地，看板与 AI 都按「当前地块」计算</span>
+            </div>
 
             <div class="farm-map-tools">
                 <button type="button" class="btn-link" id="mapPickBtn" onclick="QH_FARM.setMapMode('pick')">气象监测点</button>
@@ -391,7 +390,6 @@
                 <button type="button" class="btn-wide" onclick="QH_FARM.saveCurrent()">保存地块信息</button>
             </div>
             <div class="farm-note">切换地块会同步更新看板、AI 快照与灌溉建议；删除前请确认该地块不再使用。</div>
-            </div>
         </div>
 
         <div class="cfg-block">
