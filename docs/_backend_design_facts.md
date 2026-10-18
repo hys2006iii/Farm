@@ -436,6 +436,11 @@ CREATE INDEX IF NOT EXISTS idx_pump_runtime_user_day ON pump_runtime(user_id, da
 | POST | `/api/alerts/ack_all` | `codes`（可选，字符串数组） | `status`, `acked` | 200 / 400 / 401 | 会话 |
 | GET | `/api/logs` | `limit`(1~1000, 默认 200), `since_ts` | `status`, `count`, `logs[]` | 200 / 400 / 401 | 会话 |
 | GET | `/api/device_status` | `offline_seconds`(1~86400) | `status`, `online`, `last_seen_ts`, `silent_seconds` | 200 / 400 / 401 | 会话 |
+| POST | `/api/diag/<target>` | 路径参数 `target` ∈ `{iot, weather, ai, webhook}` | `ok`, `message`, `detail` | 200 / 400 / 401 | 会话 |
+
+- `/api/diag/<target>`：**探测失败仍返回 200**（接口本身正常完成了探测，失败是业务结论），
+  前端只读 `ok`/`message`；未知 `target` 返回 `{'error':'未知的测试目标：<target>'}` + 400。
+  未配置对应外部服务时直接给「未填写」结论，**不真的发起请求**。
 
 - 未登录统一 `{'error': '未登录'}` + 401（**与 3.2~3.5 的文案不同**）
 - `alerts[]` 每项：`rid`(1 基序号), `id`, `ts`, `level`, `code`, `content`, `acked`
