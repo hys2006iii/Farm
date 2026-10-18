@@ -140,13 +140,18 @@ def build_snapshot(uid: int) -> str:
         rows = db.query_history(uid, 40, farm_id=db.get_active_farm_id(uid))
         rows = list(reversed(rows))
         if rows:
+            # ADC -> mm 的换算与「当前地块」无关，这里一次性算完；
+            # 逐点调用会走 40 次惰性 import 与 try/except，是纯浪费。
+            from qinghe import irrigation
+
             water = [r['water_adc'] for r in rows]
             dos = [r['do_mgl'] for r in rows]
+            water_mm = [irrigation.adc_to_water_mm(w) for w in water]
             lines.append(
                 '近 40 条采样趋势：水位 ADC %s（换算 %s），溶解氧 %s mg/L'
                 % (
                     _trend(water, 0),
-                    _trend([_water_mm_of(uid, w) for w in water], 1),
+                    _trend(water_mm, 1),
                     _trend(dos, 2),
                 )
             )
@@ -169,16 +174,6 @@ def build_snapshot(uid: int) -> str:
     )
     text = '\n'.join('- ' + line if i else line for i, line in enumerate(lines))
     return text[:SNAPSHOT_MAX_CHARS]
-
-
-def _water_mm_of(uid: int, water_adc):
-    """把历史水位 ADC 换算成 mm，供快照里的趋势展示。取不到返回 None。"""
-    try:
-        from qinghe import irrigation
-
-        return irrigation.adc_to_water_mm(water_adc)
-    except Exception:  # noqa: BLE001
-        return None
 
 
 def load_ai_config(uid: int):
