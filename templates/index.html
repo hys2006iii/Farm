@@ -308,28 +308,42 @@
             <h2>系统设置</h2>
             <button onclick="closeModal('configModal')">✕</button>
         </div>
-        <div class="cfg-row">
-            <label>当前账户</label>
-            <div class="cfg-inline">
-                <input type="text" id="cfgUsername" value="{{ username }}" disabled>
-                <button type="button" class="btn-link" onclick="openModal('pwdModal')">修改密码</button>
+        <div class="cfg-block">
+            <div class="cfg-block-hd">
+                <h3>账户</h3>
+                <span class="cfg-block-sub">登录身份不可改；口令修改后需要重新登录</span>
+            </div>
+            <div class="cfg-row">
+                <label>当前账户</label>
+                <div class="cfg-inline">
+                    <input type="text" id="cfgUsername" value="{{ username }}" disabled>
+                    <button type="button" class="btn-link" onclick="openModal('pwdModal')">修改密码</button>
+                </div>
             </div>
         </div>
-        <div class="cfg-row">
-            <label>农场名称</label>
-            <input type="text" id="cfgFarmName" placeholder="如 青禾智慧农场">
-        </div>
-        <div class="cfg-grid">
-            <div class="cfg-row"><label>经度</label><input type="number" step="0.000001" id="cfgFarmLng"></div>
-            <div class="cfg-row"><label>纬度</label><input type="number" step="0.000001" id="cfgFarmLat"></div>
+
+        <div class="cfg-block">
+            <div class="cfg-block-hd">
+                <h3>地块与位置</h3>
+                <span class="cfg-block-sub">看板、AI 快照与灌溉建议都按「当前地块」计算；下方可地图选点或圈出边界</span>
+            </div>
+            <div class="cfg-row">
+                <label>农场名称</label>
+                <input type="text" id="cfgFarmName" placeholder="如 青禾智慧农场">
+            </div>
+            <div class="cfg-grid">
+                <div class="cfg-row"><label>经度</label><input type="number" step="0.000001" id="cfgFarmLng"></div>
+                <div class="cfg-row"><label>纬度</label><input type="number" step="0.000001" id="cfgFarmLat"></div>
+            </div>
         </div>
 
         <!-- 地块管理：地图选点 / 圈地 + 多地块增删改切 -->
-        <div class="cfg-block" id="farmBlock">
-            <div class="cfg-block-hd">
-                <h3>地块管理</h3>
-                <span class="cfg-block-sub">一个账号可以管多块地，看板与 AI 都按「当前地块」计算</span>
-            </div>
+        <div class="cfg-block">
+            <div class="cfg-block" id="farmBlock">
+                <div class="cfg-block-hd">
+                    <h3>地块管理</h3>
+                    <span class="cfg-block-sub">一个账号可以管多块地，看板与 AI 都按「当前地块」计算</span>
+                </div>
 
             <div class="farm-map-tools">
                 <button type="button" class="btn-link" id="mapPickBtn" onclick="QH_FARM.setMapMode('pick')">地图选点</button>
@@ -361,77 +375,82 @@
                 <span class="farm-map-hint">改了名称 / 经纬度 / 边界后点这里写入当前地块（上方「保存设置」只管设备与接口配置）</span>
             </div>
             <div class="farm-note">切换地块会同步更新看板、AI 快照与灌溉建议；删除前请确认该地块不再使用。</div>
+            </div>
         </div>
 
-        <div class="cfg-row">
-            <label>MQTT 接入 Host</label>
-            <input type="text" id="cfgIotHost" placeholder="如 xxxxxxxxxxxxxx.cn-north-4.myhuaweicloud.com">
-        </div>
-        <div class="cfg-grid">
-            <div class="cfg-row"><label>客户端设备 ID</label><input type="text" id="cfgIotDeviceId" placeholder="如 xxxxxxxxxx_client"></div>
-            <div class="cfg-row"><label>田间设备 ID</label><input type="text" id="cfgTargetDeviceId" placeholder="如 xxxxxxxxxx_ESP32-E"></div>
-        </div>
-        <div class="cfg-grid">
-            <div class="cfg-row"><label>MQTT Client ID</label><input type="text" id="cfgIotClientId" placeholder="如 xxxxxxxxxx_client_0_0_2026xxxxxx"></div>
-            <div class="cfg-row"><label>MQTT User</label><input type="text" id="cfgIotUser" placeholder="如 xxxxxxxxxx_client"></div>
-        </div>
-        <div class="cfg-row">
-            <label>MQTT Password</label>
-            <input type="password" id="cfgIotPass">
-        </div>
-        <div class="cfg-row">
-            <label>M2M 数据转发 Topic（默认：/esp32e/data）</label>
-            <input type="text" id="cfgM2mTopic" placeholder="如 /esp32e/data">
-        </div>
-        <div class="cfg-row">
-            <label>命令下行转发 Topic（默认：/esp32e/cmd）</label>
-            <input type="text" id="cfgCmdTopic" placeholder="如 /esp32e/cmd">
-        </div>
-        <div class="cfg-row">
-            <label>降雨量预测模型平台接口</label>
-            <input type="text" id="cfgWeatherDomain" placeholder="如 xxxxxxxxxx.re.qweatherapi.com">
-        </div>
-        <div class="cfg-row">
-            <label>Weather API Key</label>
-            <input type="text" id="cfgWeatherKey">
-        </div>
-        <div class="cfg-row">
-            <label>AI助手接口</label>
-            <input type="text" id="cfgAiDomain" placeholder="如 https://api.deepseek.com">
-        </div>
-        <div class="cfg-row">
-            <label>AI API Key</label>
-            <input type="password" id="cfgAiKey">
-        </div>
-        <div class="cfg-row">
-            <label>钉钉Webhook告警URL</label>
-            <input type="text" id="cfgWebhookUrl" placeholder="https://oapi.dingtalk.com/robot/send?access_token=...">
-        </div>
-
-        <!-- 演示数据：没有实体主板时用同一套 MQTT 链路灌入遥测（需服务端开启 FARM_DEV_SIM=1） -->
-        <div class="cfg-block" id="simBlock" hidden>
+        <div class="cfg-block">
             <div class="cfg-block-hd">
-                <h3>演示数据（无硬件调试）</h3>
-                <span class="cfg-block-sub">走真实遥测链路：落历史库、算 RORI、触发告警，仅用于演示与自测</span>
+                <h3>物联网接入</h3>
+                <span class="cfg-block-sub">华为云 IoTDA 的 MQTT 接入参数；口令与转发 Topic 由平台侧下发，填错会连不上设备</span>
+            </div>
+            <div class="cfg-row">
+                <label>MQTT 接入 Host</label>
+                <input type="text" id="cfgIotHost" placeholder="如 xxxxxxxxxxxxxx.cn-north-4.myhuaweicloud.com">
             </div>
             <div class="cfg-grid">
-                <div class="cfg-row"><label>场景</label>
-                    <select id="simScenario">
-                        <option value="normal">常规一天</option>
-                        <option value="drought">持续干旱</option>
-                        <option value="anaerobic">根区缺氧</option>
-                        <option value="storm">强降雨前后</option>
-                    </select>
-                </div>
-                <div class="cfg-row"><label>采样点数（1–240）</label><input type="number" id="simSamples" value="48" min="1" max="240"></div>
+                <div class="cfg-row"><label>客户端设备 ID</label><input type="text" id="cfgIotDeviceId" placeholder="如 xxxxxxxxxx_client"></div>
+                <div class="cfg-row"><label>田间设备 ID</label><input type="text" id="cfgTargetDeviceId" placeholder="如 xxxxxxxxxx_ESP32-E"></div>
             </div>
-            <div class="cfg-actions left">
-                <button type="button" class="btn-wide" id="simRunBtn" onclick="QH_FARM.runSimulation()">灌入演示数据</button>
-                <span class="farm-map-hint" id="simHint"></span>
+            <div class="cfg-grid">
+                <div class="cfg-row"><label>MQTT Client ID</label><input type="text" id="cfgIotClientId" placeholder="如 xxxxxxxxxx_client_0_0_2026xxxxxx"></div>
+                <div class="cfg-row"><label>MQTT User</label><input type="text" id="cfgIotUser" placeholder="如 xxxxxxxxxx_client"></div>
+            </div>
+            <div class="cfg-row">
+                <label>MQTT Password</label>
+                <input type="password" id="cfgIotPass" placeholder="留空表示不修改">
+            </div>
+            <div class="cfg-row">
+                <label>M2M 数据转发 Topic（默认：/esp32e/data）</label>
+                <input type="text" id="cfgM2mTopic" placeholder="如 /esp32e/data">
+            </div>
+            <div class="cfg-row">
+                <label>命令下行转发 Topic（默认：/esp32e/cmd）</label>
+                <input type="text" id="cfgCmdTopic" placeholder="如 /esp32e/cmd">
             </div>
         </div>
 
-        <div class="cfg-actions">
+        <div class="cfg-block">
+            <div class="cfg-block-hd">
+                <h3>气象与降雨预测</h3>
+                <span class="cfg-block-sub">降雨量预测模型接口用于雨情前馈：预报有雨时提前压住灌溉，减少无效补水</span>
+            </div>
+            <div class="cfg-row">
+                <label>降雨量预测模型平台接口</label>
+                <input type="text" id="cfgWeatherDomain" placeholder="如 xxxxxxxxxx.re.qweatherapi.com">
+            </div>
+            <div class="cfg-row">
+                <label>Weather API Key</label>
+                <input type="text" id="cfgWeatherKey" placeholder="和风天气控制台签发的 API Key">
+            </div>
+        </div>
+
+        <div class="cfg-block">
+            <div class="cfg-block-hd">
+                <h3>AI 助手</h3>
+                <span class="cfg-block-sub">OpenAI 兼容接口；留空则 AI 对话不可用，其余功能不受影响</span>
+            </div>
+            <div class="cfg-row">
+                <label>AI助手接口</label>
+                <input type="text" id="cfgAiDomain" placeholder="如 https://api.deepseek.com">
+            </div>
+            <div class="cfg-row">
+                <label>AI API Key</label>
+                <input type="password" id="cfgAiKey" placeholder="sk- 开头的密钥，仅保存在本机数据库">
+            </div>
+        </div>
+
+        <div class="cfg-block">
+            <div class="cfg-block-hd">
+                <h3>告警推送</h3>
+                <span class="cfg-block-sub">钉钉机器人 Webhook，用于把 RORI 风险与设备离线告警推到群里</span>
+            </div>
+            <div class="cfg-row">
+                <label>钉钉Webhook告警URL</label>
+                <input type="text" id="cfgWebhookUrl" placeholder="https://oapi.dingtalk.com/robot/send?access_token=...">
+            </div>
+        </div>
+
+        <div class="cfg-actions cfg-actions--sticky">
             <button class="btn-wide" onclick="saveConfig()">保存设置</button>
             <button class="btn-wide btn-danger" onclick="window.location.href='/api/logout'">退出登录</button>
         </div>
@@ -444,6 +463,7 @@
             <h2>修改密码</h2>
             <button onclick="closeModal('pwdModal')">✕</button>
         </div>
+        <p class="cfg-note">修改成功后当前会话会失效，需要用新密码重新登录。</p>
         <div class="cfg-row">
             <label>原密码</label>
             <input type="password" id="oldPassword" placeholder="请输入原密码">

@@ -108,24 +108,40 @@
 .chat-input-area input::placeholder { color: var(--ink-3); }
 
 /* ===== 设置表单 ===== */
+/* 节奏统一：标签 5px → 输入框 → 行距 12px；区块间距由 .cfg-block 控制。 */
 .cfg-row { margin-bottom: 12px; }
+.cfg-row:last-child { margin-bottom: 0; }
 .cfg-row label {
     display: block; font-size: 12px; font-weight: 600;
     color: var(--ink-2); margin-bottom: 5px; letter-spacing: 0.02em;
 }
 .cfg-row input {
-    width: 100%; padding: 8px 10px; font-size: 13px;
+    width: 100%; padding: 8px 10px; font-size: 13px; line-height: 1.4;
     border: 1px solid var(--line); border-radius: 2px;
     background: var(--paper-2); color: var(--ink);
     font-family: var(--font-body);
     transition: border-color 0.15s;
 }
 .cfg-row input:focus { outline: none; border-color: var(--jade); }
+.cfg-row input::placeholder { color: var(--ink-3); opacity: 0.75; }
 .cfg-row input[disabled] {
     background: var(--paper-3); color: var(--ink-3); cursor: not-allowed;
 }
-.cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
-.cfg-grid .cfg-row { margin-bottom: 0; }
+
+/* 两列 grid：用 subgrid 让同一行的标签/输入框基线严格对齐（不支持时自动退化为普通网格） */
+.cfg-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto; gap: 10px 12px; margin-bottom: 12px;
+}
+.cfg-grid:last-child { margin-bottom: 0; }
+.cfg-grid .cfg-row { margin-bottom: 0; display: grid; grid-row: span 2; grid-template-rows: subgrid; }
+.cfg-grid .cfg-row > label { margin-bottom: 0; align-self: end; }
+.cfg-grid .cfg-row > input,
+.cfg-grid .cfg-row > select { height: 100%; min-height: 36px; }
+/* 表单里输入框统一 36px 高，单列与两列的行高节奏一致 */
+.cfg-row input { min-height: 36px; }
+.cfg-block .cfg-row input,
+.cfg-block .cfg-row select { min-height: 36px; }
 
 /* 行内小按钮：纸面描边风 */
 .cfg-row .btn-link {
@@ -137,8 +153,20 @@
 .cfg-row .btn-link:hover { background: var(--jade-pale); border-color: var(--jade); }
 
 .cfg-inline { display: flex; gap: 8px; align-items: center; }
-.cfg-inline input { flex: 1; margin-top: 0; }
+.cfg-inline input { flex: 1; margin-top: 0; min-width: 0; }
+.cfg-inline .btn-link { flex: 0 0 auto; }
 .cfg-actions { display: flex; gap: 10px; margin-top: 20px; }
+/* 设置弹窗底部动作条：跟随滚动吸底，长表单里不用再滚到底才能保存 */
+.cfg-actions--sticky {
+    position: sticky; bottom: -24px; z-index: 2;
+    margin: 18px -24px -24px; padding: 12px 24px 24px;
+    background: var(--paper-2);
+    border-top: 1px solid var(--line);
+}
+.cfg-actions--sticky .btn-wide { margin-top: 0; }
+
+/* 弹窗内的说明文字：比 .cfg-block-sub 再弱一档 */
+.cfg-note { margin: 0 0 14px; font-size: 11.5px; color: var(--ink-3); line-height: 1.6; }
 
 /* 危险操作走印章朱红 */
 .cfg-actions .btn-danger {    background: var(--seal); border: 1px solid var(--seal); color: var(--paper-2);
@@ -146,23 +174,27 @@
 .cfg-actions .btn-danger:hover { background: #93382A; border-color: #93382A; }
 .cfg-actions.left { justify-content: flex-start; align-items: center; margin-top: 10px; }
 
-/* ===== 设置页分组（地块管理 / 演示数据） ===== */
+/* ===== 设置页分组（账户 / 地块 / 物联网 / 气象 / AI / 告警 / 演示数据） ===== */
+/* 统一节奏：区块之间 14px，块内最后一行不再叠加行距。 */
 .cfg-block {
-    margin: 16px 0 18px; padding: 14px 14px 12px;
+    margin: 0 0 14px; padding: 14px 14px 14px;
     border: 1px solid var(--line); border-radius: 2px;
     background: var(--paper-3);
 }
-.cfg-block-hd { margin-bottom: 10px; }
+.cfg-block:last-of-type { margin-bottom: 0; }
+.cfg-block-hd { margin-bottom: 12px; }
 .cfg-block-hd h3 {
-    display: flex; align-items: center;
+    display: flex; align-items: center; margin: 0;
     font-family: var(--font-serif); font-size: 14.5px; font-weight: 600;
     color: var(--ink); letter-spacing: 0.08em;
 }
 .cfg-block-hd h3::before {
     content: ""; display: inline-block; width: 3px; height: 13px;
-    background: var(--jade); margin-right: 8px;
+    background: var(--jade); margin-right: 8px; flex: 0 0 auto;
 }
 .cfg-block-sub { display: block; margin-top: 4px; font-size: 11.5px; color: var(--ink-3); line-height: 1.55; }
+/* 分组里再套一层分组（如「地块与位置」里的地图工作区）：去掉重复的描边，只留内边距 */
+.cfg-block .cfg-block { margin-bottom: 0; padding: 0; border: 0; background: transparent; }
 
 .cfg-block select {
     width: 100%; padding: 8px 10px; font-size: 13px;
@@ -244,8 +276,20 @@
 }
 
 @media (max-width: 720px) {
-    .modal-box, .modal-box.modal-wide, .ai-chat-box { width: calc(100vw - 32px); }
-    .cfg-grid { grid-template-columns: 1fr; }
+    .modal-overlay { padding: 16px 10px; }
+    .modal-box, .modal-box.modal-wide, .ai-chat-box { width: calc(100vw - 20px); padding: 18px; }
+    /* 窄屏：两列塌成单列，标签与输入框回到上下结构 */
+    .cfg-grid { grid-template-columns: 1fr; gap: 12px; }
+    .cfg-grid .cfg-row { display: block; grid-row: auto; grid-template-rows: none; }
+    .cfg-grid .cfg-row > label { margin-bottom: 5px; }
+    .cfg-block { padding: 12px 12px 14px; }
+    /* 动作条跟着窄屏内边距一起收，避免横向溢出 */
+    .cfg-actions { flex-direction: column; gap: 8px; }
+    .cfg-actions--sticky { margin: 16px -18px -18px; padding: 12px 18px 18px; bottom: -18px; }
+    .cfg-actions .btn-wide { margin-top: 0; }
+    /* 行内「修改密码」按钮不再和输入框挤在一行 */
+    .cfg-inline { flex-wrap: wrap; }
+    .cfg-inline .btn-link { width: 100%; }
     .farm-map { height: 200px; }
     .farm-newrow { flex-direction: column; }
 }
