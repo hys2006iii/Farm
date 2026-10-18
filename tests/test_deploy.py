@@ -280,6 +280,16 @@ class TestGenSecret:
 class TestDeployScripts:
     """一键脚本必须存在，且关键安全约束不能被删掉。"""
 
+    @staticmethod
+    def _read_bat(name):
+        """按 GBK 读取批处理脚本。
+
+        .bat 一律以 GBK(CP936) 存盘：本机 cmd 代码页是 936，脚本正文里的中文
+        直接以 GBK 写出，控制台才能正常显示。用 UTF-8 读会 UnicodeDecodeError。
+        """
+        with open(os.path.join(PROJECT_ROOT, name), encoding="gbk") as fh:
+            return fh.read()
+
     @pytest.mark.parametrize(
         "name",
         ["start_server.bat", "stop_server.bat", "firewall_allow.bat", "run.bat", "requirements.txt"],
@@ -289,19 +299,19 @@ class TestDeployScripts:
 
     def test_start_server_sets_debug_off(self):
         """start_server.bat 必须把 FARM_DEBUG 设为 0。"""
-        text = open(os.path.join(PROJECT_ROOT, "start_server.bat"), encoding="utf-8").read()
+        text = self._read_bat("start_server.bat")
         assert "set FARM_DEBUG=0" in text
         assert "server.py" in text
 
     def test_run_bat_sets_debug_on(self):
         """run.bat 是本地调试入口，FARM_DEBUG=1。"""
-        text = open(os.path.join(PROJECT_ROOT, "run.bat"), encoding="utf-8").read()
+        text = self._read_bat("run.bat")
         assert "set FARM_DEBUG=1" in text
         assert "app.py" in text
 
     def test_firewall_script_checks_admin(self):
         """防火墙脚本必须先检测管理员权限，并给出右键以管理员身份运行的提示。"""
-        text = open(os.path.join(PROJECT_ROOT, "firewall_allow.bat"), encoding="utf-8").read()
+        text = self._read_bat("firewall_allow.bat")
         assert "net session" in text
         assert "以管理员身份运行" in text
         assert "netsh advfirewall firewall add rule" in text
@@ -309,7 +319,7 @@ class TestDeployScripts:
 
     def test_stop_script_prints_pid_before_kill(self):
         """stop_server.bat 必须先打印 PID 并等待确认，不能盲杀。"""
-        text = open(os.path.join(PROJECT_ROOT, "stop_server.bat"), encoding="utf-8").read()
+        text = self._read_bat("stop_server.bat")
         assert "netstat -ano" in text
         assert "taskkill" in text
         assert "确认结束该进程吗" in text
