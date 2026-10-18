@@ -125,19 +125,29 @@ body.login-page {
     display: flex; flex-direction: column; justify-content: space-between;
     text-align: right;
     font-family: var(--font-num); font-size: 12px; letter-spacing: 0.04em;
-    color: #8E9C8C;
+    color: #8E9C8C; line-height: 1.4;
 }
-/* 标尺旁的一列刻度读数：纯静态示意，标注量程含义而非实时数据 */
+/* 标尺旁的一列刻度读数：纯静态示意，标注量程含义而非实时数据。
+   四行必须与左侧刻度一一对齐（300 顶 / 200 三分之一 / 100 三分之二 / 0 底），
+   所以用和 .gauge-labels 完全相同的「满高 + space-between」定位；
+   表头改成绝对定位放到标尺上方，不占标尺高度 —— 否则会把四行整体压缩、
+   与刻度错位（曾出现「200 适灌」与 150 mm 读数线画在同一高度）。 */
 .gauge-read {
+    position: relative;
     flex: 0 0 auto;
-    display: flex; flex-direction: column; justify-content: space-between;
-    padding: 2px 0;
+    width: 104px;
 }
 .gauge-read-title {
-    font-size: 9.5px; letter-spacing: 0.24em; color: #6F7D6E;
+    position: absolute; left: 0; bottom: 100%; margin-bottom: 9px;
+    font-size: 9.5px; letter-spacing: 0.24em; color: #6F7D6E; white-space: nowrap;
+}
+.gauge-read-rows {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; justify-content: space-between;
 }
 .gauge-read-row {
     display: flex; align-items: baseline; gap: 8px;
+    line-height: 1.4;
     font-family: var(--font-num);
     font-size: 10.5px; letter-spacing: 0.06em; color: #9AA79A;
 }
