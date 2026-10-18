@@ -64,6 +64,21 @@
 | G4 | 离线可用 | Chart.js / Leaflet / Socket.IO 全部本地化到 `static/vendor/`，CSP 收紧为只信任同源；校园网屏蔽 CDN 时图表与地图不再静默失效；三页声明站点图标消除 404 |
 | G5 | 无遥测不臆测 | 未收到遥测时 `/api/telemetry` 读数为 `null`、七日建议不再按默认 0 值给出「维持即可」；看板与 AI 快照如实标注「暂无」 |
 
+### 5. 第四轮（体验打磨与降噪）
+
+| 编号 | 项 | 要点 |
+| --- | --- | --- |
+| H1 | 告警一键确认 | `POST /api/alerts/ack_all`：支持按类型码过滤、幂等；洞察面板告警 Tab 加「全部确认」，成功后同步刷新概览带未确认计数 |
+| H2 | 数据新鲜度 | 顶栏新增胶囊，显示「N 秒前更新」并按 fresh(<15s)/stale(<60s)/lost 三档换色；与「设备是否在线」分开表达，避免含糊结论 |
+| H3 | 阈值预设方案 | 节水优先 / 标准灌溉 / 保墒防旱三套，一键摆好四个滑杆（标准与后端默认值严格一致），仍可手动微调 |
+| H4 | 重复消息降噪 | 告警与运行日志按「正文指纹（数字抹成 #）」冷却：告警 60s + 3s 全局最小间隔，日志 30s；阈值附近抖动不再刷屏、不再重复推 webhook |
+| H5 | 阈值随时可调 | 阈值设定原本在自动模式下整块置灰且不可点击，而它正是自动调控的输入参数；改为始终可调，仅「设备手动调控」随模式禁用 |
+| H6 | 版面与对齐 | 登录页水尺放大到视口高度的一半以上且刻度读数逐行对齐；田间气象牌通栏；读数卡按比例铺满不再留大片空白；调控卡与读数卡底边齐平；双滑杆区间高亮 |
+
+第五批新增 1 个路径（`/api/alerts/ack_all`），并新增 `tools/visual_check.py`
+（headless Edge + CDP）把「渲染成什么样」也纳入验收：17 项断言覆盖尺寸、对齐、
+溢出、分组、降级与窄屏单列。
+
 
 ---
 
@@ -75,7 +90,7 @@
         ▼                        ▼
 ┌───────────────────────────────────────────────┐
 │ Flask 应用（waitress 生产承载，多线程）        │
-│  qinghe/routes/*  蓝图层（11 个蓝图）          │
+│  qinghe/routes/*  蓝图层（10 个蓝图）          │
 │  qinghe/{auth,iot,irrigation,alerts,weather,ai}│
 │  qinghe/{alert_center,logbook,heartbeat,       │
 │          planner,metrics,autocontrol} 新模块   │
@@ -147,14 +162,19 @@ python server.py                    # 或 start_server.bat
 ## 四、测试
 
 ```bash
-python -m pytest tests -q           # Python 侧全量（当前 832 passed）
-npm run test:js                     # 前端纯函数（node --test，需 Node 18+，当前 92 passed）
+python -m pytest tests -q           # Python 侧全量（当前 876 passed）
+npm run test:js                     # 前端纯函数（node --test，需 Node 18+，当前 133 passed）
+python tools/visual_check.py        # 浏览器验收（headless Edge + CDP，17 项，需 websocket-client）
 ```
 
 - Python 用例覆盖：鉴权与限流、配置读写、遥测解析与落库、RORI 与动态阈值、告警判定与推送、
-  预案状态机、自动调控、指标核算、CSV 导出、SocketIO 事件、多地块、七日建议、设备模拟、
-  AI 快照、知识库页面、部署脚本静态检查。
-- 前端用例抽出纯函数（`computeRori`、分级、动态阈值、圈地面积与格式等）做无浏览器测试。
+  告警批量确认、预案状态机、自动调控、指标核算、CSV 导出、SocketIO 事件、多地块、七日建议、
+  外部灌数通道、重复消息冷却、AI 快照、知识库页面、部署脚本静态检查。
+- 前端用例抽出纯函数（`computeRori`、分级、动态阈值、圈地面积、双滑杆几何、告警与日志指纹、
+  数据新鲜度、阈值预设）做无浏览器测试。
+- `visual_check.py` 负责「渲染成什么样」：起 waitress + 临时库，断言水尺尺寸、泵卡顺序、
+  两列卡片底边齐平、滑杆区间高亮、日志卡未塌陷、无横向溢出、设置分组与字段齐全、
+  地图降级提示、窄屏单列，并把各页截图写到 `docs/_shots/`。
 - 交付验收命令（AGENTS.md）：`python -m pytest tests -q` 必须全绿。
 
 ### 没有实物主板时怎么验

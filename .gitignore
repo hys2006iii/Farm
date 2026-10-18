@@ -25,3 +25,6 @@ docs/_raw/
 .idea/
 .DS_Store
 Thumbs.db
+
+# 浏览器验收脚本产物（可再生，不入库）
+docs/_shots/

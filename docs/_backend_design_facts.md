@@ -433,6 +433,7 @@ CREATE INDEX IF NOT EXISTS idx_pump_runtime_user_day ON pump_runtime(user_id, da
 | --- | --- | --- | --- | --- | --- |
 | GET | `/api/alerts` | `limit`(1~500, 默认 100), `since_ts` | `status`, `count`, `alerts[]` | 200 / 400 / 401 | 会话 |
 | POST | `/api/alerts/ack` | `id` | `status`, `id`, `acked` | 200 / 400 / 404 / 401 | 会话 |
+| POST | `/api/alerts/ack_all` | `codes`（可选，字符串数组） | `status`, `acked` | 200 / 400 / 401 | 会话 |
 | GET | `/api/logs` | `limit`(1~1000, 默认 200), `since_ts` | `status`, `count`, `logs[]` | 200 / 400 / 401 | 会话 |
 | GET | `/api/device_status` | `offline_seconds`(1~86400) | `status`, `online`, `last_seen_ts`, `silent_seconds` | 200 / 400 / 401 | 会话 |
 
