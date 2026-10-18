@@ -294,6 +294,38 @@ def ack_alert(uid: int, alert_id: int) -> bool:
         return cursor.rowcount > 0
 
 
+def ack_all_alerts(uid: int, codes=None) -> int:
+    """一键确认该用户的全部未确认告警，返回本次确认条数。
+
+    「批量处理」是值守场景的刚需：告警中心一屏可能积压几十条同类提示，
+    逐条点确认既不现实也容易漏掉真正重要的那条。
+
+    参数:
+        uid:   用户 id
+        codes: 可选，只确认这些类型码（例如只清掉 `soil_low` 这类持续性提示）；
+               为 None / 空时确认全部未确认告警。类型码不在白名单内的忽略。
+
+    返回: 实际被更新的行数（幂等：再调一次返回 0）。
+    """
+    _ensure_schema()
+    user_id = _as_int(uid, -1)
+    if user_id <= 0:
+        return 0
+    sql = 'UPDATE alerts SET acked = 1 WHERE user_id = ? AND acked = 0'
+    params = [user_id]
+    if codes:
+        wanted = [code for code in (_normalize_code(item) for item in codes)
+                  if code in ALERT_CODES]
+        if not wanted:
+            return 0
+        sql += ' AND code IN (%s)' % ','.join('?' * len(wanted))
+        params.extend(wanted)
+    with closing(get_db()) as conn:
+        cursor = conn.execute(sql, tuple(params))
+        conn.commit()
+        return int(cursor.rowcount or 0)
+
+
 def prune_alerts(keep_days: int = 7) -> int:
     """删除早于 `keep_days` 天的告警，返回删除行数（幂等）。"""
     _ensure_schema()

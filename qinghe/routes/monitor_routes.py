@@ -6,8 +6,10 @@
 路由：
 - GET  /api/alerts          服务端告警列表（分页 / 增量拉取）
 - POST /api/alerts/ack      确认（已读）一条告警
+- POST /api/alerts/ack_all  一键确认全部（或按类型码过滤）未确认告警
 - GET  /api/logs            运行日志列表（分页 / 增量拉取）
 - GET  /api/device_status   设备在线状态（心跳超时判定）
+- GET  /api/telemetry       当前地块最新遥测快照
 """
 
 from flask import Blueprint, jsonify, request, session
@@ -99,6 +101,28 @@ def ack_alert():
     if not alert_center.ack_alert(uid, alert_id):
         return jsonify({'status': 'error', 'error': '告警不存在或不属于当前用户'}), 404
     return jsonify({'status': 'success', 'id': alert_id, 'acked': True})
+
+
+@bp.post('/api/alerts/ack_all')
+def ack_all_alerts():
+    """一键确认该用户的全部未确认告警（可按类型码过滤）。
+
+    请求体可选：`{'codes': ['soil_low', 'rori_high']}`；省略则确认全部。
+    幂等：没有未确认告警时返回 `acked=0` 而不是报错。
+    """
+    uid = _current_uid()
+    if uid is None:
+        return _unauthorized()
+
+    payload = _json_body()
+    codes = payload.get('codes')
+    if codes is not None and not isinstance(codes, list):
+        return jsonify({'status': 'error', 'error': 'codes 需为字符串数组'}), 400
+    if codes is not None and len(codes) > len(alert_center.ALERT_CODES):
+        return jsonify({'status': 'error', 'error': 'codes 数量超出上限'}), 400
+
+    acked = alert_center.ack_all_alerts(uid, codes)
+    return jsonify({'status': 'success', 'acked': acked})
 
 
 @bp.get('/api/logs')

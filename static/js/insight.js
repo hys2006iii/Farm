@@ -286,6 +286,32 @@
         });
     }
 
+    /** 一键确认全部未确认告警（值守场景：积压几十条时逐条点不现实） */
+    function ackAllAlerts(btn) {
+        if (btn) { btn.disabled = true; btn.textContent = '确认中...'; }
+        fetchJSON('/api/alerts/ack_all', {
+            method: 'POST',
+            body: JSON.stringify({})
+        }).then(function (data) {
+            var count = (data && typeof data.acked === 'number') ? data.acked : 0;
+            if (root.toast) {
+                root.toast(count ? ('已确认 ' + count + ' 条告警') : '没有待确认的告警', 'success');
+            }
+            loadAlerts();
+            refreshUnackedKpi();
+        }).catch(function (e) {
+            if (btn) { btn.disabled = false; btn.textContent = '全部确认'; }
+            fail('批量确认失败：' + e.message);
+        });
+    }
+
+    /** 概览带的「未确认告警」计数：批量确认后立刻同步，不必等 5 分钟轮询 */
+    function refreshUnackedKpi() {
+        if (root.QH_ADVICE && typeof root.QH_ADVICE.refreshAlerts === 'function') {
+            root.QH_ADVICE.refreshAlerts();
+        }
+    }
+
     /** 单条告警行（时间 / 级别色点 / 类型 / 内容 / 确认按钮） */
     function alertRow(a) {
         var item = a && typeof a === 'object' ? a : {};
@@ -724,6 +750,8 @@
         }
         var propose = document.getElementById('insightProposeBtn');
         if (propose) propose.addEventListener('click', proposePlan);
+        var ackAll = document.getElementById('insightAckAllBtn');
+        if (ackAll) ackAll.addEventListener('click', function () { ackAllAlerts(ackAll); });
         var refresh = document.getElementById('insightRefreshBtn');
         if (refresh) refresh.addEventListener('click', refreshCurrent);
         var close = document.getElementById('insightCloseBtn');
@@ -743,6 +771,7 @@
         open: openInsight, close: closeInsight, showTab: showTab,
         loadAlerts: loadAlerts, loadLogs: loadLogs, loadDeviceStatus: loadDeviceStatus,
         loadMetrics: loadMetrics, loadPlans: loadPlans, proposePlan: proposePlan,
+        ackAllAlerts: ackAllAlerts,
         refreshCurrent: refreshCurrent
     };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

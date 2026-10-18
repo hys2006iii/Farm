@@ -52,6 +52,8 @@
         <div class="status-col">
             <div class="status-pill" id="cloudStatus"><span class="status-dot dot-gray"></span>华为云：未连接</div>
             <div class="status-pill" id="deviceStatusPill"><span class="status-dot dot-gray"></span>传感器：未连接</div>
+            <!-- 数据新鲜度：画面上这组读数是什么时候到的（与「设备是否离线」分开表达） -->
+            <div class="freshness-pill freshness-lost" id="dataFreshnessPill">数据 尚未收到数据</div>
         </div>
     </div>
 </div>
@@ -229,10 +231,20 @@
                 </div>
                 <button id="modeToggleBtn" class="btn-wide btn-wide--accent" onclick="toggleMode()">切换至 手动接管模式</button>
 
-                <div id="autoThresholdArea" class="control-group-disabled">
+                <!-- 阈值设定：自动/手动模式下都保持可调（自动调控以它为输入参数） -->
+                <div id="autoThresholdArea">
                     <div class="control-divider"></div>
 
                     <div class="control-sub-hd">阈值设定</div>
+                    <!-- 预设方案：一键把四个滑杆摆到典型组合，仍可再手动微调 -->
+                    <div class="thresh-presets" role="group" aria-label="阈值预设方案">
+                        <button type="button" class="thresh-preset" data-preset="water_saving"
+                                onclick="applyThreshPreset('water_saving')">节水优先</button>
+                        <button type="button" class="thresh-preset is-on" data-preset="standard"
+                                onclick="applyThreshPreset('standard')">标准灌溉</button>
+                        <button type="button" class="thresh-preset" data-preset="moisture_hold"
+                                onclick="applyThreshPreset('moisture_hold')">保墒防旱</button>
+                    </div>
                     <div class="thresh-group divider">
                         <div class="thresh-row">
                             <span class="thresh-name">土壤湿度阈值 (%RH)</span>
@@ -525,6 +537,7 @@
             <div class="insight-pane active" id="insightPane-alerts">
                 <div class="insight-toolbar">
                     <h3>告警记录（最多 100 条）</h3>
+                    <button type="button" class="insight-btn" id="insightAckAllBtn">全部确认</button>
                 </div>
                 <div id="insightAlertList"></div>
             </div>

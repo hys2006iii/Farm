@@ -119,6 +119,18 @@ body {
     display: flex; align-items: center; white-space: nowrap;
 }
 
+/* ===== 数据新鲜度胶囊 =====
+   与「设备是否离线」分开表达：这里回答的是「画面上的数字有多旧」。
+   颜色只换文字与一条 2px 左边线，不铺色块，保持顶栏的墨绿底不被切碎。 */
+.freshness-pill {
+    font-size: 10.5px; letter-spacing: 0.04em; white-space: nowrap;
+    padding-left: 7px; border-left: 2px solid transparent;
+    font-variant-numeric: tabular-nums;
+}
+.freshness-pill.freshness-fresh { color: #9CC3A8; border-left-color: #6FAE85; }
+.freshness-pill.freshness-stale { color: #D9C089; border-left-color: #C8903F; }
+.freshness-pill.freshness-lost { color: #C99A8F; border-left-color: #C1634F; }
+
 /* ===== 主布局 =====
    需求：左列「田间实时数据」与右列「调控与阈值」底边齐平。
    做法：.main-wrap 作为唯一 grid，.left-col / .right-col 用 display:contents
@@ -132,8 +144,10 @@ body {
 }
 /* 列容器不参与布局，卡片直接成为主网格 item，从而共享行轨道 */
 .left-col, .right-col { display: contents; }
-/* 左列：小气候(1) 读数卡(2) 雨情建议(3) 告警(4) */
-.left-col > .section:nth-child(1) { grid-column: 1; grid-row: 1; }
+/* 左列：小气候(1) 读数卡(2) 雨情建议(3) 告警(4)。
+   小气候横贯整行（第 1 行右半边本来空着，会留下一个大缺口），
+   它本身是「田间气象牌」横幅，通栏反而更像顶栏下的一条状态带。 */
+.left-col > .section:nth-child(1) { grid-column: 1 / -1; grid-row: 1; }
 .left-col > .section:nth-child(2) { grid-column: 1; grid-row: 2; }
 .left-col > .section:nth-child(3) { grid-column: 1; grid-row: 3; }
 .left-col > .section:nth-child(4) { grid-column: 1; grid-row: 4; }

@@ -167,11 +167,12 @@
             updateDualRangeFill('humiDownInput', 'humiUpInput');
             updateDualRangeFill('waterlevelDownInput', 'waterlevelUpInput');
             root.updateThresholdFusionHint();
-            // 恢复模式：若后端存的是手动模式，则进入手动状态
+            // 恢复模式：若后端存的是手动模式，则进入手动状态。
+            // 只放开「设备手动调控」；阈值设定是自动调控的输入参数，任何时候都应可调
+            // （见 toggleMode 里的同一条说明）。
             if (d.manual_mode && !S.manualMode) {
                 S.manualMode = true;
                 QH.toggleClass(QH.$('manualControlGroup'), 'control-group-disabled', false);
-                QH.toggleClass(QH.$('autoThresholdArea'), 'control-group-disabled', false);
                 QH.setText(QH.$('modeToggleBtn'), '切换至 全自动接管模式');
                 QH.setStyle(QH.$('modeToggleBtn'), 'backgroundColor', '#3B6B4A');
             }
@@ -197,17 +198,18 @@
     function toggleMode() {
         S.manualMode = !S.manualMode;
         var groupEl = QH.$('manualControlGroup');
-        var threshEl = QH.$('autoThresholdArea');
         var btnEl = QH.$('modeToggleBtn');
+        // 只切换「设备手动调控」的可用性。
+        // 阈值设定是自动调控**读取的输入参数**（动态阈值以它为基准），
+        // 如果按模式把它整块置灰，用户在最需要调参的自动模式下反而改不了，
+        // 只能先切手动、改完再切回来 —— 既别扭又容易漏切回来。
         if (S.manualMode) {
             QH.toggleClass(groupEl, 'control-group-disabled', false);
-            QH.toggleClass(threshEl, 'control-group-disabled', false);
             QH.setText(btnEl, '切换至 全自动接管模式');
             QH.setStyle(btnEl, 'backgroundColor', '#3B6B4A');
             root.addLog('系统已切换至【手动调控模式】', 'log-info');
         } else {
             QH.toggleClass(groupEl, 'control-group-disabled', true);
-            QH.toggleClass(threshEl, 'control-group-disabled', true);
             QH.setText(btnEl, '切换至 手动接管模式');
             QH.setStyle(btnEl, 'backgroundColor', '#C8903F');
             root.addLog('系统已恢复【自动智能调控模式】', 'log-safe');
@@ -219,7 +221,73 @@
         saveMode();
     }
 
-    /** 应用阈值参数（保存在后端，供自动调控逻辑使用） */
+    /* ---------------- 阈值预设方案 ----------------
+     * 三个「一键套用」的阈值组合。农户真正要的是决策而不是四个数字：
+     * 苗期怕旱、分蘖期怕淹、抽穗期要稳，各不相同。预设点一下就把四个滑杆
+     * 摆到位，用户仍可再手动微调。
+     */
+    var THRESH_PRESETS = {
+        water_saving: {
+            name: '节水优先',
+            desc: '下限抬高、上限压低，只在该补水时才补水',
+            humi_down: 45, humi_up: 75, waterlevel_down: 40, waterlevel_up: 130
+        },
+        standard: {
+            name: '标准灌溉',
+            desc: '出厂默认组合，适合大多数田块',
+            humi_down: 40, humi_up: 80, waterlevel_down: 30, waterlevel_up: 150
+        },
+        moisture_hold: {
+            name: '保墒防旱',
+            desc: '下限放低、上限放宽，优先保住墒情',
+            humi_down: 30, humi_up: 90, waterlevel_down: 20, waterlevel_up: 180
+        }
+    };
+
+    /**
+     * 取一个预设的阈值组合（纯函数，便于单测）。
+     * @param {string} key 预设键
+     * @returns {{name:string,humidity:number,water:number}|null} 未知键返回 null
+     */
+    function threshPreset(key) {
+        if (!Object.prototype.hasOwnProperty.call(THRESH_PRESETS, key)) return null;
+        var preset = THRESH_PRESETS[key];
+        return {
+            name: preset.name,
+            desc: preset.desc,
+            humi_down: preset.humi_down,
+            humi_up: preset.humi_up,
+            waterlevel_down: preset.waterlevel_down,
+            waterlevel_up: preset.waterlevel_up
+        };
+    }
+
+    /** 把预设套到四个滑杆上并刷新联动文案（不自动保存，用户点「应用参数」才落库） */
+    function applyThreshPreset(key) {
+        var preset = threshPreset(key);
+        if (!preset) return null;
+        var setVal = function (id, value) {
+            var el = QH.$(id);
+            if (el) el.value = value;
+        };
+        setVal('humiDownInput', preset.humi_down);
+        setVal('humiUpInput', preset.humi_up);
+        setVal('waterlevelDownInput', preset.waterlevel_down);
+        setVal('waterlevelUpInput', preset.waterlevel_up);
+        QH.setText(QH.$('humiDownVal'), preset.humi_down);
+        QH.setText(QH.$('humiUpVal'), preset.humi_up);
+        QH.setText(QH.$('waterlevelDownVal'), preset.waterlevel_down);
+        QH.setText(QH.$('waterlevelUpVal'), preset.waterlevel_up);
+        if (typeof updateDualRangeFill === 'function') {
+            updateDualRangeFill('humiDownInput', 'humiUpInput');
+            updateDualRangeFill('waterlevelDownInput', 'waterlevelUpInput');
+        }
+        root.updateThresholdFusionHint();
+        if (root.toast) root.toast('已套用「' + preset.name + '」，点「应用参数」后生效', 'success');
+        return preset;
+    }
+
+
     function applyThresholds() {
         var humiUp = parseInt((QH.$('humiUpInput') || {}).value, 10) || 80;
         var humiDown = parseInt((QH.$('humiDownInput') || {}).value, 10) || 40;
@@ -255,7 +323,10 @@
         loadThreshSettings: loadThreshSettings,
         saveMode: saveMode,
         toggleMode: toggleMode,
-        applyThresholds: applyThresholds
+        applyThresholds: applyThresholds,
+        threshPreset: threshPreset,
+        applyThreshPreset: applyThreshPreset,
+        THRESH_PRESETS: THRESH_PRESETS
     };
 
     // 模板内联 onclick 需要的全局
@@ -263,10 +334,15 @@
     root.onWaterLevelSlider = onWaterLevelSlider;
     // node 环境（无 window）下直接取用，便于 tests/js/config.test.mjs 单测纯函数
     if (typeof module !== 'undefined' && module.exports) {
-        module.exports = { dualRangeGeometry: dualRangeGeometry };
+        module.exports = {
+            dualRangeGeometry: dualRangeGeometry,
+            threshPreset: threshPreset,
+            THRESH_PRESETS: THRESH_PRESETS
+        };
     }
     root.saveConfig = saveConfig;
     root.changePassword = changePassword;
     root.toggleMode = toggleMode;
     root.applyThresholds = applyThresholds;
+    root.applyThreshPreset = applyThreshPreset;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
