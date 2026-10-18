@@ -108,6 +108,109 @@
     function openModal(id) { var el = $(id); if (el) el.classList.remove('hidden'); }
     function closeModal(id) { var el = $(id); if (el) el.classList.add('hidden'); }
 
+    /* ================= 自带弹窗（替代浏览器原生 alert/confirm/prompt） =================
+     * 原生弹窗有三个问题：样式与整站的纸质配色完全割裂；会阻塞整个渲染线程
+     * （弹着的时候 socket 消息、图表刷新全停）；标题栏会写「127.0.0.1:5000 显示」
+     * 这种和业务无关的地址。这里用站内模态替代，支持 X / 取消 / 确认 / Esc 关闭。
+     */
+    var dialogState = { resolve: null, kind: 'alert' };
+
+    /** 关闭当前弹窗并回传结果（确认 → true / 输入值，取消 → false / null） */
+    function closeDialog(value) {
+        var box = $('qhDialog');
+        if (box) box.classList.add('hidden');
+        var resolve = dialogState.resolve;
+        dialogState.resolve = null;
+        if (resolve) resolve(value);
+    }
+
+    /**
+     * 打开站内弹窗。
+     * @param {string} kind alert / confirm / prompt
+     * @param {string} message 正文
+     * @param {string} [defaultValue] prompt 的初始值
+     * @returns {Promise<boolean|string|null>} alert→true；confirm→bool；prompt→字符串或 null
+     */
+    function openDialog(kind, message, defaultValue) {
+        return new Promise(function (resolve) {
+            var box = $('qhDialog');
+            if (!box) { resolve(kind === 'confirm' ? false : (kind === 'prompt' ? null : true)); return; }
+            // 上一次弹窗还没关就被再次调用：先把上一个 resolve 掉，避免它的 Promise 悬空
+            if (dialogState.resolve) {
+                var prev = dialogState.resolve;
+                dialogState.resolve = null;
+                prev(kind === 'confirm' ? false : (kind === 'prompt' ? null : true));
+            }
+            dialogState = { resolve: resolve, kind: kind };
+            setText($('qhDialogBody'), message || '');
+            var title = $('qhDialogTitle');
+            if (title) {
+                title.textContent = kind === 'confirm' ? '请确认'
+                    : (kind === 'prompt' ? '请输入' : '提示');
+            }
+            var input = $('qhDialogInput');
+            if (input) {
+                input.hidden = (kind !== 'prompt');
+                input.value = (kind === 'prompt' && defaultValue != null) ? String(defaultValue) : '';
+            }
+            var cancel = $('qhDialogCancel');
+            if (cancel) cancel.hidden = (kind === 'alert');
+            var ok = $('qhDialogOk');
+            if (ok) ok.textContent = (kind === 'confirm') ? '确认' : '确定';
+            box.classList.remove('hidden');
+            // 输入框要能直接打字：focus 放在下一帧，等 hidden 撤掉后再聚焦
+            if (kind === 'prompt' && input) {
+                setTimeout(function () { try { input.focus(); input.select(); } catch (e) { /* 忽略 */ } }, 0);
+            }
+        });
+    }
+
+    /** alert 的站内版：只提示一个「确定」 */
+    function dialogAlert(message) { return openDialog('alert', message); }
+
+    /** confirm 的站内版：返回 Promise&lt;boolean&gt; */
+    function dialogConfirm(message) { return openDialog('confirm', message); }
+
+    /** prompt 的站内版：取消返回 null（与原生 prompt 一致） */
+    function dialogPrompt(message, defaultValue) {
+        return openDialog('prompt', message, defaultValue);
+    }
+
+    /** 绑定弹窗按钮与 Esc；由 init() 调一次 */
+    function bindDialog() {
+        var box = $('qhDialog');
+        if (!box) return;
+        var ok = $('qhDialogOk'), cancel = $('qhDialogCancel'), close = $('qhDialogClose');
+        if (ok) ok.addEventListener('click', function () {
+            var input = $('qhDialogInput');
+            var value = (dialogState.kind === 'prompt')
+                ? ((input && input.value) || '')
+                : (dialogState.kind === 'confirm' ? true : true);
+            closeDialog(value);
+        });
+        if (cancel) cancel.addEventListener('click', function () {
+            closeDialog(dialogState.kind === 'prompt' ? null : false);
+        });
+        if (close) close.addEventListener('click', function () {
+            closeDialog(dialogState.kind === 'prompt' ? null : false);
+        });
+        // 点遮罩空白处等同于取消；点弹窗本体不关
+        box.addEventListener('click', function (ev) {
+            if (ev.target === box) closeDialog(dialogState.kind === 'prompt' ? null : false);
+        });
+        // Esc 关闭：原生弹窗支持，站内弹窗必须自己实现，否则用户会觉得「退不出去」
+        document.addEventListener('keydown', function (ev) {
+            if (ev.key !== 'Escape') return;
+            if (box.classList.contains('hidden')) return;
+            closeDialog(dialogState.kind === 'prompt' ? null : false);
+        });
+        // prompt 里回车即确认，和原生手感一致
+        var input = $('qhDialogInput');
+        if (input) input.addEventListener('keydown', function (ev) {
+            if (ev.key === 'Enter') { ev.preventDefault(); if (ok) ok.click(); }
+        });
+    }
+
     /* ================= DOM 批量更新队列 =================
      * SocketIO 消息可能 3s 一条、多设备更高频。所有消息只入队，
      * 由统一 tick 每 500ms 合并成一次 DOM 批量更新，并做「值未变不写」比对。
@@ -208,6 +311,8 @@
         esc: esc, fmtTime: fmtTime, pad2: pad2, $: $,
         setText: setText, setStyle: setStyle, toggleClass: toggleClass,
         toast: toast, openModal: openModal, closeModal: closeModal,
+        dialogAlert: dialogAlert, dialogConfirm: dialogConfirm,
+        dialogPrompt: dialogPrompt, bindDialog: bindDialog, closeDialog: closeDialog,
         enqueueField: enqueueField,
         enqueuePump: enqueuePump, enqueueFlag: enqueueFlag, enqueueSlider: enqueueSlider,
         flushDom: flushDom, pumpPresentation: pumpPresentation,
@@ -221,6 +326,9 @@
     root.toast = toast;
     root.openModal = openModal;
     root.closeModal = closeModal;
+    root.dialogAlert = dialogAlert;
+    root.dialogConfirm = dialogConfirm;
+    root.dialogPrompt = dialogPrompt;
     root.updateRori = function () { /* 由 irrigation/realtime 覆盖 */ };
     root.refreshStatus = function () { /* 由 realtime 覆盖 */ };
     root.checkAlerts = function () { /* 由 alerts 逻辑覆盖 */ };

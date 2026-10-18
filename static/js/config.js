@@ -109,7 +109,17 @@
     }
 
     /** 保存配置到后端 */
-    function saveConfig() {
+    /**
+     * 收集设置页字段并保存。
+     *
+     * @param {boolean|object} [opts] 传 true 或 `{silent:true}` 表示「静默保存」：
+     *        不弹提示、不关弹窗、不重新拉配置。设置页的「测试连接」会先静默存一次
+     *        （否则拿旧配置去探测，测出来的结果和刚填的内容对不上），
+     *        这时再弹一次「配置已更新」并关掉弹窗会打断用户的操作流。
+     * @returns {Promise<object|null>} 后端响应；失败返回 null
+     */
+    function saveConfig(opts) {
+        var silent = opts === true || (opts && opts.silent);
         var payload = {};
         Object.keys(CONFIG_FIELDS).forEach(function (id) {
             var el = QH.$(id);
@@ -123,10 +133,14 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         }).then(function (r) { return r.json(); }).then(function (data) {
-            alert(data.message);
-            if (data.status === 'success') { QH.closeModal('configModal'); loadConfig(); }
+            if (!silent) {
+                QH.toast(data.message || '已保存', 'success');
+                if (data.status === 'success') { QH.closeModal('configModal'); loadConfig(); }
+            }
+            return data;
         }).catch(function () {
-            alert('保存失败，请检查后端是否在线');
+            if (!silent) QH.toast('保存失败，请检查后端是否在线', 'warn');
+            return null;
         });
     }
 
@@ -136,17 +150,17 @@
         var oldPw = oldEl ? oldEl.value : '';
         var newPw = newEl ? newEl.value : '';
         var confirmPw = cfmEl ? cfmEl.value : '';
-        if (!oldPw || !newPw) { alert('请输入原密码与新密码'); return; }
-        if (newPw !== confirmPw) { alert('两次输入的新密码不一致'); return; }
+        if (!oldPw || !newPw) { QH.toast('请输入原密码与新密码', 'warn'); return; }
+        if (newPw !== confirmPw) { QH.toast('两次输入的新密码不一致', 'warn'); return; }
         fetch('/api/change_password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ old_password: oldPw, new_password: newPw })
         }).then(function (r) { return r.json(); }).then(function (data) {
-            alert(data.message);
+            QH.toast(data.message || '已修改', 'success');
             if (data.status === 'success') window.location.href = '/api/logout';
         }).catch(function () {
-            alert('修改失败，请检查后端是否在线');
+            QH.toast('修改失败，请检查后端是否在线', 'warn');
         });
     }
 
@@ -328,11 +342,14 @@
             })
         }).then(function (r) { return r.json(); }).then(function () {
             root.addLog('[阈值保存] 湿度: ' + humiDown + '% ~ ' + humiUp + '% | 水位: ' + wlDown + 'mm ~ ' + wlUp + 'mm', 'log-info');
-            alert('设定已保存！\n湿度阈值: ' + humiDown + '% ~ ' + humiUp + '%\n水位阈值: ' + wlDown + 'mm ~ ' + wlUp + 'mm');
+            // 用站内弹窗而不是原生 alert：原生弹窗会阻塞渲染线程，弹着的时候
+            // socket 消息与图表刷新全停；样式也和整站割裂。
+            QH.dialogAlert('设定已保存！\n湿度阈值: ' + humiDown + '% ~ ' + humiUp
+                + '%\n水位阈值: ' + wlDown + 'mm ~ ' + wlUp + 'mm');
             // 保存后按当前数据重新评估自动调控
             root.updateRori();
         }).catch(function () {
-            alert('保存失败，请检查后端是否在线');
+            QH.dialogAlert('保存失败，请检查后端是否在线');
         });
     }
 

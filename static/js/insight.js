@@ -597,21 +597,25 @@
     /** 拒绝预案 */
     function rejectPlan(id, okBtn, noBtn) {
         if (id === undefined || id === null) return;
-        var reason = root.prompt ? (root.prompt('请输入拒绝原因（可留空）', '') || '') : '';
-        okBtn.disabled = true;
-        noBtn.disabled = true;
-        fetchJSON('/api/plan/reject', {
-            method: 'POST',
-            body: JSON.stringify({ id: Number(id), reason: reason })
-        }).then(function () {
-            if (root.toast) root.toast('预案已拒绝', 'success');
-            noBtn.textContent = '已拒绝';
-            if (currentPlan) currentPlan.status = 'rejected';
-            loadPlans();
-        }).catch(function (e) {
-            okBtn.disabled = false;
-            noBtn.disabled = false;
-            fail('拒绝失败：' + e.message);
+        // 站内输入框：原生 prompt 阻塞渲染线程且样式割裂；取消（null）视为放弃操作
+        QH.dialogPrompt('请输入拒绝原因（可留空）', '').then(function (answer) {
+            if (answer === null) return null;
+            var reason = answer || '';
+            okBtn.disabled = true;
+            noBtn.disabled = true;
+            return fetchJSON('/api/plan/reject', {
+                method: 'POST',
+                body: JSON.stringify({ id: Number(id), reason: reason })
+            }).then(function () {
+                if (root.toast) root.toast('预案已拒绝', 'success');
+                noBtn.textContent = '已拒绝';
+                if (currentPlan) currentPlan.status = 'rejected';
+                loadPlans();
+            }).catch(function (e) {
+                okBtn.disabled = false;
+                noBtn.disabled = false;
+                fail('拒绝失败：' + e.message);
+            });
         });
     }
 

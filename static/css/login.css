@@ -207,6 +207,27 @@ body.login-page {
 }
 .form-frame { width: min(412px, 100%); position: relative; }
 
+/* ===== 站内提示条：替代原生 alert =====
+   原生弹窗会阻塞渲染线程、样式与纸质配色割裂、标题栏还带站点地址。
+   这里做成卡片上方的一条内联提示，自动收起，不打断填写。 */
+.login-notice {
+    margin-bottom: 12px; padding: 10px 14px;
+    background: rgba(44, 95, 74, 0.07);
+    border: 1px solid rgba(44, 95, 74, 0.24);
+    border-left: 3px solid var(--jade);
+    border-radius: 2px;
+    font-size: 12.5px; line-height: 1.6; color: var(--ink-2);
+    word-break: break-word;
+}
+.login-notice[hidden] { display: none; }
+/* 校验失败 / 请求异常：换成朱红，和「成功」区分开 */
+.login-notice--warn {
+    background: rgba(163, 74, 58, 0.07);
+    border-color: rgba(163, 74, 58, 0.26);
+    border-left-color: var(--seal);
+    color: #8C4636;
+}
+
 .login-card {
     position: relative;
     background: var(--paper-2);

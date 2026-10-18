@@ -412,15 +412,19 @@
     }
 
     function deleteFarm(farm) {
-        if (!root.confirm('确定删除地块「' + farm.name + '」？该地块的阈值与历史不会一并删除。')) return;
-        api('/api/farms/delete', { farm_id: farm.id }).then(function () {
-            QH.toast('地块已删除', 'success');
-            return loadFarms().then(function () {
-                if (farm.id === state.activeId) root.location.reload();
+        // 站内确认框：原生 confirm 会阻塞渲染线程，且样式与整站割裂
+        QH.dialogConfirm('确定删除地块「' + farm.name + '」？该地块的阈值与历史不会一并删除。')
+            .then(function (ok) {
+                if (!ok) return null;
+                return api('/api/farms/delete', { farm_id: farm.id }).then(function () {
+                    QH.toast('地块已删除', 'success');
+                    return loadFarms().then(function () {
+                        if (farm.id === state.activeId) root.location.reload();
+                    });
+                }).catch(function (err) {
+                    QH.toast('删除失败：' + err.message, 'danger');
+                });
             });
-        }).catch(function (err) {
-            QH.toast('删除失败：' + err.message, 'danger');
-        });
     }
 
     /** 读地块列表并刷新所有相关界面 */

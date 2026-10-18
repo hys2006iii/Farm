@@ -1,13 +1,13 @@
 """青禾智灌 —— 配置与阈值 HTTP 接口。
 
-覆盖：/api/get_config、/api/save_config、/api/thresh_settings(GET/POST)。
+覆盖：/api/get_config、/api/save_config、/api/diag/<target>、/api/thresh_settings(GET/POST)。
 修复点：非 dict 请求体不再 500（统一 400）、配置字段严格类型/长度/范围校验、
 阈值与 manual_mode 严格校验、iot_port 类型/范围校验（非法值保留旧值）。
 """
 
 from flask import Blueprint, jsonify, request, session
 
-from qinghe import config, db, irrigation, iot, validators
+from qinghe import config, db, diag, irrigation, iot, validators
 
 bp = Blueprint('config_api', __name__)
 
@@ -216,6 +216,22 @@ def api_save_config():
     # 异步重连：避免 connect() 的 60s 超时阻塞请求线程
     _reconnect_async(uid)
     return jsonify({'status': 'success', 'message': '配置已更新'})
+
+
+@bp.route('/api/diag/<target>', methods=['POST'])
+def api_diag(target):
+    """设置页「测试连接」：对指定外部接入做一次只读连通性探测。
+
+    纯探测，不写库、不重连、不落告警；未知目标返回 400 而不是 500。
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': '未授权'}), 401
+    if target not in diag.TARGETS:
+        return jsonify({'error': '未知的测试目标：%s' % target}), 400
+    result = diag.run_test(session['user_id'], target)
+    # 探测失败不是接口错误（接口本身正常完成了探测），统一 200 + ok 字段，
+    # 前端只需读 ok/message，不必区分 HTTP 状态。
+    return jsonify(result)
 
 
 @bp.route('/api/thresh_settings', methods=['GET'])

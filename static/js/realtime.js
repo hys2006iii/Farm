@@ -425,7 +425,7 @@
             S.socket.emit('send_command', { device: device, action: action.toLowerCase() });
             root.addLog('[手动] 指令: ' + (device === 'air_pump' ? '气泵' : '水泵') + ' ➡️ ' + action.toLowerCase(), 'log-info');
         } else {
-            alert('设备未在线，无法发送指令');
+            QH.dialogAlert('设备未在线，无法发送指令');
         }
     }
 

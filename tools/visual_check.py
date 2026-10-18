@@ -464,8 +464,46 @@ def run(args) -> int:
                         browser.evaluate(
                             "(() => { const f = document.getElementById('farmMapFallback');"
                             " return !!f && !f.hidden; })()"), 'farmMapFallback'))
+        # 「测试连接」按钮：模板里挂上了，但 .btn-link 的样式原先只作用于
+        # .cfg-row 等容器，漏了这层选择器按钮就会退化成浏览器默认外观。
+        # 这里量按钮的实际尺寸，确认样式真的命中了。
+        diag_ui = browser.evaluate("""(() => {
+            const ids = ['diagIotBtn','diagWeatherBtn','diagAiBtn','diagWebhookBtn'];
+            const bad = [];
+            ids.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) { bad.push(id + ':缺失'); return; }
+                const r = el.getBoundingClientRect();
+                if (r.height < 20 || r.width < 50) bad.push(id + ':未套用样式 ' + Math.round(r.width) + 'x' + Math.round(r.height));
+            });
+            return bad;
+        })()""")
+        results.append(('设置页「测试连接」按钮已套用样式', not diag_ui, diag_ui))
         browser.evaluate("closeModal('configModal')")
         browser.wait(0.6)
+
+        # 3b) 站内弹窗：替代原生 alert/confirm/prompt，必须能开、能确认、能 Esc 关
+        dialog_ok = browser.evaluate("""(async () => {
+            const opened = !!document.getElementById('qhDialog');
+            if (!opened) return {ok: false, why: '模板里没有 #qhDialog'};
+            let resolved = null;
+            const p = QH.dialogConfirm('自检：确认吗？');
+            const box = document.getElementById('qhDialog');
+            const visible = !box.classList.contains('hidden');
+            document.getElementById('qhDialogOk').click();
+            resolved = await p;
+            const closed = box.classList.contains('hidden');
+            // Esc 关闭路径
+            const p2 = QH.dialogPrompt('自检：输入点什么', 'x');
+            document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}));
+            const esc = await p2;
+            return {ok: visible && resolved === true && closed && esc === null,
+                    why: 'visible=' + visible + ' confirm=' + resolved + ' closed=' + closed + ' esc=' + esc};
+        })()""")
+        results.append(('站内弹窗可开关（确认 / Esc）',
+                        bool(dialog_ok and dialog_ok.get('ok')),
+                        dialog_ok.get('why') if dialog_ok else dialog_ok))
+        browser.wait(0.3)
 
         # 4) 智能洞察
         browser.evaluate("openInsight()")

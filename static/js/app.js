@@ -214,6 +214,8 @@
         registerTickTasks();
         QH.startTicker();
         updateClock();
+        // 站内弹窗的按钮 / Esc 绑定：替代浏览器原生 alert/confirm/prompt
+        QH.bindDialog();
 
         // 4) 后端数据：配置 / 阈值 / 模式
         CONFIG.loadConfig().then(function () {

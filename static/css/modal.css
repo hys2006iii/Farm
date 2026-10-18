@@ -58,6 +58,45 @@
 }
 .modal-hd button:hover { background: var(--paper-3); border-color: var(--line-2); color: var(--ink); }
 
+/* ===== 站内弹窗：替代浏览器原生 alert / confirm / prompt =====
+   原生弹窗样式与纸质配色割裂、阻塞渲染线程、标题栏还带站点地址。
+   这里只补原生弹窗缺的那几件东西：正文、输入框、按钮排布。 */
+.qh-dialog .modal-bd { padding: 4px 0 18px; }
+.qh-dialog-body {
+    margin: 0; font-size: 13px; line-height: 1.75; color: var(--ink-2);
+    /* 消息里可能带 \n（如阈值保存提示），保留换行 */
+    white-space: pre-wrap; word-break: break-word;
+}
+.qh-dialog-input {
+    margin-top: 12px; width: 100%; box-sizing: border-box;
+    background: var(--paper); border: 1px solid var(--line-2); border-radius: 2px;
+    padding: 8px 10px; font-size: 13px; color: var(--ink); font-family: inherit;
+}
+.qh-dialog-input:focus { outline: none; border-color: var(--jade); }
+.qh-dialog .cfg-actions { margin-top: 0; }
+/* 次要动作按钮：描边不填色，避免与主按钮抢视线 */
+.btn-ghost { background: transparent; color: var(--ink-2); border-color: var(--line-2); }
+.btn-ghost:hover { background: var(--paper-3); color: var(--ink); }
+
+/* ===== 设置页「测试连接」行 =====
+   放在各接入区块的字段之后，按钮与结果小字同一行。
+   .btn-link 的样式原先只挂在 .cfg-row / .farm-map-tools / .farm-row-actions
+   之下，这里必须自带一份，否则按钮会退化成浏览器默认样式。 */
+.cfg-test { display: flex; align-items: center; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+.cfg-test .btn-link {
+    background: var(--paper-2); color: var(--jade);
+    border: 1px solid var(--line-2); border-radius: 2px;
+    padding: 6px 14px; font-size: 12px; font-weight: 600; font-family: inherit;
+    cursor: pointer; transition: background 0.15s, border-color 0.15s;
+}
+.cfg-test .btn-link:hover { background: var(--jade-pale); border-color: var(--jade); }
+.cfg-test .btn-link:disabled { opacity: 0.6; cursor: default; }
+/* 结果小字：默认墨绿（成功），失败时整条换朱红，和站内提示条同一套语义 */
+.cfg-test-result { font-size: 11.5px; line-height: 1.6; color: var(--jade); }
+.cfg-test-result.is-ok { color: var(--jade); }
+.cfg-test-result.is-bad { color: var(--seal); }
+.cfg-test-result[hidden] { display: none; }
+
 /* ===== AI 对话 ===== */
 .ai-chat-box { width: 640px; height: 600px; display: flex; flex-direction: column; }
 

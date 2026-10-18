@@ -15,6 +15,33 @@
         btn.textContent = locked ? lockedText : normalText;
     }
 
+    /**
+     * 站内提示条：替代浏览器原生 alert。
+     *
+     * 登录页不加载 core.js（那边是看板的 15KB 依赖），所以这里自带一个最小实现。
+     * 原生 alert 有三个问题：样式与纸质配色割裂、阻塞渲染线程、标题栏写着
+     * 「127.0.0.1:5000 显示」这种和业务无关的地址。
+     *
+     * @param {string} message 提示正文
+     * @param {string} [kind] 'warn' 用朱红强调，其余走墨绿
+     */
+    function notice(message, kind) {
+        var box = document.getElementById('loginNotice');
+        if (!box) {
+            // 兜底：模板里没有提示条时退化成原生弹窗，总比静默无反馈好
+            window.alert(message);
+            return;
+        }
+        box.textContent = String(message);
+        box.className = 'login-notice' + (kind === 'warn' ? ' login-notice--warn' : '');
+        box.hidden = false;
+        // 自动收起，避免上一条提示一直挂在表单上方
+        if (noticeTimer) clearTimeout(noticeTimer);
+        noticeTimer = setTimeout(function () { box.hidden = true; }, 6000);
+    }
+
+    var noticeTimer = null;
+
     /** 切换登录 / 注册面板 */
     function switchPanel(panel) {
         var loginPanel = document.getElementById('loginPanel');
@@ -198,7 +225,7 @@
      * 切换失败给出提示但仍继续进入（看板会展示原生效地块，不至于卡死）。
      */
     function enterFarm() {
-        if (selectedFarmId === null) { alert('请先选择一块地'); return; }
+        if (selectedFarmId === null) { notice('请先选择一块地', 'warn'); return; }
         if (selectedFarmId === activeFarmId) { window.location.href = '/'; return; }
 
         lockButton('farmEnterBtn', true, '切换中...', '进入监控台');
@@ -210,14 +237,14 @@
             return r.json().catch(function () { return {}; });
         }).then(function (data) {
             if (!data || data.status !== 'success') {
-                alert((data && (data.message || data.error)) || '地块切换失败，仍将进入监控台');
+                notice((data && (data.message || data.error)) || '地块切换失败，仍将进入监控台', 'warn');
             }
             // 切换失败时 activeFarmId 仍是旧值，把选择同步回去，
             // 避免用户点了「返回」后再进来看到高亮与实际生效地块不一致。
             activeFarmId = (data && data.status === 'success') ? selectedFarmId : activeFarmId;
             window.location.href = '/';
         }).catch(function () {
-            alert('地块切换请求异常，仍将进入监控台');
+            notice('地块切换请求异常，仍将进入监控台', 'warn');
             window.location.href = '/';
         });
     }
@@ -228,7 +255,7 @@
         var passEl = document.getElementById('loginPassword');
         var username = userEl ? userEl.value.trim() : '';
         var password = passEl ? passEl.value : '';
-        if (!username || !password) { alert('请输入用户名和密码'); return; }
+        if (!username || !password) { notice('请输入用户名和密码', 'warn'); return; }
 
         lockButton('loginBtn', true, '登录中...', '登 录');
         fetch('/api/login', {
@@ -251,10 +278,10 @@
                 window.location.href = '/';
                 return;
             }
-            alert((data && data.message) || '登录失败');
+            notice((data && data.message) || '登录失败', 'warn');
             lockButton('loginBtn', false, '登录中...', '登 录');
         }).catch(function () {
-            alert('网络异常，请检查后端服务是否在线');
+            notice('网络异常，请检查后端服务是否在线', 'warn');
             lockButton('loginBtn', false, '登录中...', '登 录');
         });
     }
@@ -267,8 +294,8 @@
         var username = userEl ? userEl.value.trim() : '';
         var password = passEl ? passEl.value : '';
         var confirmPw = cfmEl ? cfmEl.value : '';
-        if (!username || !password) { alert('请填写用户名和密码'); return; }
-        if (password !== confirmPw) { alert('两次输入的密码不一致'); return; }
+        if (!username || !password) { notice('请填写用户名和密码', 'warn'); return; }
+        if (password !== confirmPw) { notice('两次输入的密码不一致', 'warn'); return; }
 
         lockButton('registerBtn', true, '注册中...', '注 册');
         fetch('/api/register', {
@@ -280,15 +307,15 @@
             return r.json().catch(function () { return {}; });
         }).then(function (data) {
             if (data && data.status === 'success') {
-                alert('注册成功，请登录');
+                notice('注册成功，请登录');
                 switchPanel('login');
                 var loginUser = document.getElementById('loginUsername');
                 if (loginUser) loginUser.value = username;
                 return;
             }
-            alert((data && data.message) || '注册失败');
+            notice((data && data.message) || '注册失败', 'warn');
         }).catch(function () {
-            alert('网络异常，请检查后端服务是否在线');
+            notice('网络异常，请检查后端服务是否在线', 'warn');
         }).then(function () {
             lockButton('registerBtn', false, '注册中...', '注 册');
         });
@@ -312,4 +339,7 @@
     window.handleRegister = handleRegister;
     window.switchPanel = switchPanel;
     window.enterFarm = enterFarm;
+    window.showManageHint = function () {
+        notice('进入监控台后，可在「地块管理」中新增、编辑或删除地块');
+    };
 })();

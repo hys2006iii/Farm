@@ -418,6 +418,10 @@
                 <label>命令下行转发 Topic（默认：/esp32e/cmd）</label>
                 <input type="text" id="cfgCmdTopic" placeholder="如 /esp32e/cmd">
             </div>
+            <div class="cfg-test">
+                <button type="button" class="btn-link" id="diagIotBtn" onclick="QH_DIAG.run('iot')">测试连接</button>
+                <span class="cfg-test-result" id="diagIotResult" hidden></span>
+            </div>
         </div>
 
         <div class="cfg-block">
@@ -432,6 +436,10 @@
             <div class="cfg-row">
                 <label>Weather API Key</label>
                 <input type="text" id="cfgWeatherKey" placeholder="和风天气控制台签发的 API Key">
+            </div>
+            <div class="cfg-test">
+                <button type="button" class="btn-link" id="diagWeatherBtn" onclick="QH_DIAG.run('weather')">测试连接</button>
+                <span class="cfg-test-result" id="diagWeatherResult" hidden></span>
             </div>
         </div>
 
@@ -448,6 +456,10 @@
                 <label>AI API Key</label>
                 <input type="password" id="cfgAiKey" placeholder="sk- 开头的密钥，仅保存在本机数据库">
             </div>
+            <div class="cfg-test">
+                <button type="button" class="btn-link" id="diagAiBtn" onclick="QH_DIAG.run('ai')">测试连接</button>
+                <span class="cfg-test-result" id="diagAiResult" hidden></span>
+            </div>
         </div>
 
         <div class="cfg-block">
@@ -458,6 +470,10 @@
             <div class="cfg-row">
                 <label>钉钉Webhook告警URL</label>
                 <input type="text" id="cfgWebhookUrl" placeholder="https://oapi.dingtalk.com/robot/send?access_token=...">
+            </div>
+            <div class="cfg-test">
+                <button type="button" class="btn-link" id="diagWebhookBtn" onclick="QH_DIAG.run('webhook')">推送测试消息</button>
+                <span class="cfg-test-result" id="diagWebhookResult" hidden></span>
             </div>
         </div>
 
@@ -579,6 +595,26 @@
     </div>
 </div>
 
+<!-- ===== 站内弹窗：替代浏览器原生 alert / confirm / prompt =====
+     原生弹窗样式与整站配色割裂、会阻塞渲染线程、标题栏还带「127.0.0.1:5000 显示」。
+     这里统一成纸质模态，X / 取消 / 确认 / Esc 都能关。 -->
+<div id="qhDialog" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="qhDialogTitle">
+    <div class="modal-box modal-narrow qh-dialog">
+        <div class="modal-hd">
+            <h2 id="qhDialogTitle">提示</h2>
+            <button type="button" id="qhDialogClose" aria-label="关闭">✕</button>
+        </div>
+        <div class="modal-bd">
+            <p class="qh-dialog-body" id="qhDialogBody"></p>
+            <input type="text" id="qhDialogInput" class="qh-dialog-input" hidden>
+        </div>
+        <div class="cfg-actions">
+            <button type="button" class="btn-wide" id="qhDialogOk">确定</button>
+            <button type="button" class="btn-wide btn-ghost" id="qhDialogCancel">取消</button>
+        </div>
+    </div>
+</div>
+
 <!-- ===== 脚本：defer 保证按书写顺序执行（core -> store -> charts -> 业务 -> app） ===== -->
 <script src="{{ url_for('static', filename='js/core.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/store.js') }}" defer></script>
@@ -591,6 +627,7 @@
 <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/insight.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/advice.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/diag.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/farm.js') }}" defer></script>
 </body>
 </html>
