@@ -17,24 +17,8 @@ _WEBHOOK_URL_MAX_LEN = 500
 
 
 def _reconnect_async(uid):
-    """在后台守护线程里重建 MQTT 连接。
-
-    `iot.connect_huawei_iot()` 内部的 `client.connect()` 超时可达 60 秒，
-    同步执行会把 HTTP 请求线程一起卡死（华为云不可达时尤其明显）。这里改成
-    异步：接口立即返回，连接结果由 SocketIO 的 `device_status` 事件推给前端。
-    """
-    import threading
-
-    try:
-        thread = threading.Thread(
-            target=iot.connect_huawei_iot,
-            args=(uid,),
-            name='iot-reconnect-%s' % uid,
-            daemon=True,
-        )
-        thread.start()
-    except Exception:  # noqa: BLE001 - 线程起不来也不能影响配置保存结果
-        pass
+    """在后台守护线程里重建 MQTT 连接（实现已收敛到 iot.reconnect_async）。"""
+    iot.reconnect_async(uid)
 
 
 def _to_int(value, default=None):
@@ -135,12 +119,30 @@ def _explicit_coords(data) -> dict:
     return out
 
 
+def _explicit_iot(data: dict, values: dict) -> dict:
+    """挑出本次请求真正提交的物联网接入字段，用于同步到当前地块。
+
+    规则与坐标一致：键不出现在请求里 = 这次没碰它，不动地块原值；值为掩码占位
+    = 前端没改动，同样不动；只有用户真的填了（含填成空串=清空）才写入地块。
+    这样旧前端、只改一个字段的部分提交都不会误清其它字段。
+    """
+    out = {}
+    for key in db.FARM_IOT_COLUMNS:
+        if key not in data:
+            continue
+        raw = data.get(key)
+        if raw == config.MASK or raw is None:
+            continue
+        out[key] = values.get(key)
+    return out
+
+
 @bp.route('/api/get_config', methods=['GET'])
 def api_get_config():
     """读取当前用户配置；敏感凭据不回显明文，已设置则返回掩码占位。"""
     if 'user_id' not in session:
         return jsonify({'error': '未授权'}), 401
-    cfg = db.load_config(session['user_id'])
+    cfg = db.load_iot_config(session['user_id'])
     if not cfg:
         return jsonify({'error': '未找到配置'}), 404
     cfg = dict(cfg)
@@ -212,6 +214,15 @@ def api_save_config():
         if farm_meta:
             db.save_active_farm_meta(uid, **farm_meta)
     except Exception:  # noqa: BLE001 - 地块同步失败不影响配置保存
+        pass
+    # 物联网接入按地块独立：把本次提交的接入字段同步到当前地块，之后切回这块地
+    # 就是它自己的接入信息。未提交的字段不动（掩码占位同样按「未改动」处理）。
+    try:
+        farm_iot = _explicit_iot(data, values)
+        farm_id = db.get_active_farm_id(uid)
+        if farm_iot and farm_id:
+            db.save_farm_iot(uid, farm_id, farm_iot)
+    except Exception:  # noqa: BLE001 - 地块接入同步失败不影响配置保存
         pass
     # 异步重连：避免 connect() 的 60s 超时阻塞请求线程
     _reconnect_async(uid)

@@ -201,6 +201,13 @@ def api_switch_farm():
         planner.reset_telemetry(uid)
     except Exception:  # noqa: BLE001 - 清缓存失败不应影响切换
         pass
+    # 物联网接入按地块独立：换地即换接入信息，异步重连避免阻塞请求线程
+    try:
+        from qinghe import iot
+
+        iot.reconnect_async(uid)
+    except Exception:  # noqa: BLE001 - 重连失败不应影响切换
+        pass
     return jsonify({
         'status': 'success',
         'message': '已切换地块',

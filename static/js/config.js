@@ -90,6 +90,19 @@
     };
     var CONFIG_DEFAULTS = { cfgM2mTopic: '/esp32e/data', cfgCmdTopic: '/esp32e/cmd' };
 
+    /**
+     * 刷新「物联网接入」的作用域标签，让用户看清这组参数落到哪块地上。
+     *
+     * 接入参数按地块独立保存，所以标签必须带当前地块名；拿不到名字时退回
+     * 通用文案，不显示成空标签。
+     */
+    function renderIotScope() {
+        var el = QH.$('iotScopeTag');
+        if (!el) return;
+        var name = (S.config && S.config.farm_name) || '';
+        el.textContent = name ? '按地块独立配置 · 当前：' + name : '按地块独立配置';
+    }
+
     /** 读取后端配置并回填表单，随后刷新天气/预报 */
     function loadConfig() {
         return fetch('/api/get_config').then(function (r) { return r.json(); }).then(function (data) {
@@ -103,6 +116,7 @@
                 var el = QH.$(id);
                 if (el) el.value = data[CONFIG_DEFAULTS[id]] || CONFIG_DEFAULTS[id];
             });
+            renderIotScope();
             root.fetchWeather();
             root.fetchForecast();
         }).catch(function () { /* 后端不可用时保留表单默认值 */ });
@@ -359,6 +373,7 @@
         dualRangeGeometry: dualRangeGeometry,
         updateDualRangeFill: updateDualRangeFill,
         loadConfig: loadConfig,
+        renderIotScope: renderIotScope,
         saveConfig: saveConfig,
         changePassword: changePassword,
         loadThreshSettings: loadThreshSettings,

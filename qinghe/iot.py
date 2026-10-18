@@ -544,8 +544,11 @@ def connect_huawei_iot(uid) -> bool:
 
     app 用 client 设备身份连接；订阅数据转发 Topic（ESP32-E 数据被规则推到这）
     与自身的 user/# 命令反馈。配置不完整或连接失败返回 False。
+
+    接入参数按地块独立：走 `db.load_iot_config()`，地块上填了的字段优先，
+    留空的字段回落到账号级配置，因此切换地块即切换到该地块的接入信息。
     """
-    cfg = db.load_config(uid)
+    cfg = db.load_iot_config(uid)
     if not cfg:
         return False
     host = cfg['iot_host'] or ''
@@ -600,6 +603,28 @@ def connect_huawei_iot(uid) -> bool:
             'connected': False,
         }
     return True
+
+
+def reconnect_async(uid) -> None:
+    """在后台守护线程里重建该用户的 MQTT 连接。
+
+    `connect_huawei_iot()` 内部的 `client.connect()` 超时可达 60 秒，同步执行会把
+    HTTP 请求线程一起卡死（华为云不可达时尤其明显）。这里改成异步：调用方立即返回，
+    连接结果由 SocketIO 的 `device_status` 事件推给前端。
+    用于两处：设置页保存接入参数后、以及切换地块后（接入信息按地块独立）。
+    """
+    import threading
+
+    try:
+        thread = threading.Thread(
+            target=connect_huawei_iot,
+            args=(uid,),
+            name='iot-reconnect-%s' % uid,
+            daemon=True,
+        )
+        thread.start()
+    except Exception:  # noqa: BLE001 - 线程起不来也不能影响调用方结果
+        pass
 
 
 def send_property_command(uid, props) -> bool:

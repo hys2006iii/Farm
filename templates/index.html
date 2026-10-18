@@ -360,11 +360,16 @@
             <div class="farm-map-tools">
                 <button type="button" class="btn-link" id="mapPickBtn" onclick="QH_FARM.setMapMode('pick')">气象监测点</button>
                 <button type="button" class="btn-link" id="mapPolyBtn" onclick="QH_FARM.setMapMode('poly')">边界设置</button>
-                <button type="button" class="btn-link" id="mapUndoBtn" onclick="QH_FARM.undoPolyPoint()">撤回</button>
-                <button type="button" class="btn-link" id="mapRedoBtn" onclick="QH_FARM.redoPolyPoint()">回退</button>
                 <button type="button" class="btn-link" id="mapClearBtn" onclick="QH_FARM.clearPoly()">清空</button>
-                <span class="farm-map-hint" id="farmMapHint">在地图上点一下即取该点经纬度；边界设置模式下逐点点击勾出田块边界</span>
+                <!-- 撤回 / 回退：弯箭头按钮，靠右顶格 -->
+                <div class="farm-map-history">
+                    <button type="button" class="btn-link btn-icon" id="mapUndoBtn"
+                            onclick="QH_FARM.undoPolyPoint()" title="撤回上一点" aria-label="撤回上一点">↶</button>
+                    <button type="button" class="btn-link btn-icon" id="mapRedoBtn"
+                            onclick="QH_FARM.redoPolyPoint()" title="回退刚撤回的点" aria-label="回退刚撤回的点">↷</button>
+                </div>
             </div>
+            <p class="farm-map-hint" id="farmMapHint">在地图上点一下即取该点经纬度；边界设置模式下逐点点击勾出田块边界</p>
             <div class="farm-map" id="farmMap" role="application" aria-label="地块位置地图"></div>
             <div class="farm-map-fallback" id="farmMapFallback" hidden>
                 地图底图未加载（离线或瓦片不可达），可直接在上方填写经纬度。
@@ -393,6 +398,7 @@
             <div class="cfg-block-hd">
                 <h3>物联网接入</h3>
                 <span class="cfg-block-sub">华为云 IoTDA 的 MQTT 接入参数；口令与转发 Topic 由平台侧下发，填错会连不上设备</span>
+                <span class="cfg-scope-tag" id="iotScopeTag">按地块独立配置</span>
             </div>
             <div class="cfg-row">
                 <label>MQTT 接入 Host</label>

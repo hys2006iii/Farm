@@ -134,6 +134,12 @@ def init_db(force: bool = False) -> None:
             cursor.execute(
                 'CREATE INDEX IF NOT EXISTS idx_farms_user ON farms(user_id, id)'
             )
+            # 老库的 farms 表可能没有按地块独立保存的物联网接入字段，按需补列
+            cursor.execute('PRAGMA table_info(farms)')
+            farm_cols = [r[1] for r in cursor.fetchall()]
+            for col, ddl in _FARM_MIGRATIONS:
+                if col not in farm_cols:
+                    cursor.execute(ddl)
             # farms 表在旧库可能不存在（上面已补建），configs 的 active_farm_id 交给迁移列表
             conn.commit()
         _initialized = True
@@ -160,6 +166,29 @@ _HISTORY_MIGRATIONS = [
     ('do_mgl', 'ALTER TABLE sensor_history ADD COLUMN do_mgl REAL'),
     ('eh_mv', 'ALTER TABLE sensor_history ADD COLUMN eh_mv REAL'),
     ('farm_id', 'ALTER TABLE sensor_history ADD COLUMN farm_id INTEGER DEFAULT 0'),
+]
+
+#: 物联网接入参数按地块独立保存：一块地一套华为云接入信息（不同地块可能挂在
+#: 不同的产品/设备下）。字段留空表示「跟随账号级配置」，因此旧数据无需搬迁，
+#: 读配置时按字段逐项回落到 configs 表即可。
+FARM_IOT_COLUMNS = (
+    'iot_host', 'iot_port', 'iot_client_id', 'iot_user', 'iot_pass',
+    'iot_device_id', 'iot_target_device_id', 'iot_m2m_topic', 'iot_cmd_topic',
+)
+
+#: farms 表的增量迁移列（列名, DDL）
+_FARM_MIGRATIONS = [
+    ('iot_host', 'ALTER TABLE farms ADD COLUMN iot_host TEXT DEFAULT ""'),
+    # iot_port 用 0 表示未设置（回落到账号级）；端口本身不可能是 0
+    ('iot_port', 'ALTER TABLE farms ADD COLUMN iot_port INTEGER DEFAULT 0'),
+    ('iot_client_id', 'ALTER TABLE farms ADD COLUMN iot_client_id TEXT DEFAULT ""'),
+    ('iot_user', 'ALTER TABLE farms ADD COLUMN iot_user TEXT DEFAULT ""'),
+    ('iot_pass', 'ALTER TABLE farms ADD COLUMN iot_pass TEXT DEFAULT ""'),
+    ('iot_device_id', 'ALTER TABLE farms ADD COLUMN iot_device_id TEXT DEFAULT ""'),
+    ('iot_target_device_id',
+     'ALTER TABLE farms ADD COLUMN iot_target_device_id TEXT DEFAULT ""'),
+    ('iot_m2m_topic', 'ALTER TABLE farms ADD COLUMN iot_m2m_topic TEXT DEFAULT ""'),
+    ('iot_cmd_topic', 'ALTER TABLE farms ADD COLUMN iot_cmd_topic TEXT DEFAULT ""'),
 ]
 
 
@@ -569,3 +598,77 @@ def save_active_farm_meta(uid: int, name=None, lat=None, lon=None,
         area_m2 if area_m2 is not None else farm['area_m2'],
         polygon if polygon is not None else farm['polygon'],
     )
+
+
+def save_farm_iot(uid: int, farm_id: int, values: dict) -> bool:
+    """把物联网接入参数写到指定地块，返回是否命中。
+
+    只接受 `FARM_IOT_COLUMNS` 里出现的键，其余忽略；未出现在 `values` 里的
+    字段保持地块原值不变（调用方按「用户这次提交了哪些字段」构造 values）。
+    字符串统一 strip 后落库，空串即「该字段跟随账号级配置」。
+    """
+    fields = [c for c in FARM_IOT_COLUMNS if c in values]
+    if not fields:
+        return False
+    sets = []
+    params = []
+    for col in fields:
+        value = values[col]
+        if col == 'iot_port':
+            port = _to_positive_int(value)
+            sets.append('iot_port=?')
+            params.append(port)
+            continue
+        sets.append('%s=?' % col)
+        params.append('' if value is None else str(value).strip())
+    params.extend([uid, farm_id])
+    with closing(get_db()) as conn:
+        cur = conn.execute(
+            'UPDATE farms SET %s WHERE user_id=? AND id=?' % ', '.join(sets),
+            tuple(params),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+
+
+def _to_positive_int(value) -> int:
+    """把端口值转成正整数；非法或 <=0 一律返回 0（0 = 未设置）。"""
+    try:
+        num = int(str(value).strip())
+    except (TypeError, ValueError):
+        return 0
+    return num if num > 0 else 0
+
+
+def load_iot_config(uid: int) -> dict:
+    """读取该账号当前生效地块的物联网接入参数。
+
+    以账号级 configs 行为底，再按字段叠加当前地块的非空值——地块上留空的字段
+    自动回落到账号级配置，因此「只给某块地单独填了设备 ID」也能正常工作。
+    返回 None 表示账号级配置行不存在。
+    """
+    row = load_config(uid)
+    if row is None:
+        return None
+    merged = dict(row)
+    farm_id = get_active_farm_id(uid)
+    if not farm_id:
+        return merged
+    with closing(get_db()) as conn:
+        cur = conn.execute(
+            'SELECT * FROM farms WHERE user_id=? AND id=?', (uid, farm_id)
+        )
+        farm = cur.fetchone()
+    if farm is None:
+        return merged
+    for col in FARM_IOT_COLUMNS:
+        if col not in farm.keys():
+            continue
+        value = farm[col]
+        if col == 'iot_port':
+            if _to_positive_int(value) > 0:
+                merged[col] = _to_positive_int(value)
+            continue
+        if value is not None and str(value).strip():
+            merged[col] = str(value).strip()
+    return merged

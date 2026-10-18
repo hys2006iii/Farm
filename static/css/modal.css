@@ -232,6 +232,14 @@
     background: var(--jade); margin-right: 8px; flex: 0 0 auto;
 }
 .cfg-block-sub { display: block; margin-top: 4px; font-size: 11.5px; color: var(--ink-3); line-height: 1.55; }
+/* 作用域标签：说明这一组参数是「按地块独立」还是「全账号通用」，
+   让用户一眼看出改动会落到哪块地上。做成小圆角药丸，比正文弱、比说明文字强。 */
+.cfg-scope-tag {
+    display: inline-block; margin-top: 6px; padding: 2px 8px;
+    font-size: 10.5px; letter-spacing: 0.06em; color: var(--jade);
+    background: rgba(44, 95, 74, 0.08); border: 1px solid rgba(44, 95, 74, 0.22);
+    border-radius: 999px;
+}
 /* 分组里再套一层分组（如「地块与位置」里的地图工作区）：去掉重复的描边，只留内边距 */
 .cfg-block .cfg-block { margin-bottom: 0; padding: 0; border: 0; background: transparent; }
 
@@ -244,7 +252,7 @@
 .cfg-block select:focus { outline: none; border-color: var(--jade); }
 
 /* 地图工具行 */
-.farm-map-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-bottom: 8px; }
+.farm-map-tools { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 6px; margin-bottom: 8px; }
 .farm-map-tools .btn-link {
     background: var(--paper-2); color: var(--jade);
     border: 1px solid var(--line-2); border-radius: 2px;
@@ -252,7 +260,15 @@
 }
 .farm-map-tools .btn-link:hover { background: var(--jade-pale); border-color: var(--jade); }
 .farm-map-tools .btn-link.is-on { background: var(--jade); border-color: var(--jade); color: var(--paper-2); }
-.farm-map-hint { font-size: 11px; color: var(--ink-3); line-height: 1.5; }
+/* 撤回 / 回退：弯箭头图标按钮，整组靠右顶格；用等宽字形宽度保证两枚按钮一样宽 */
+.farm-map-history { margin-left: auto; display: flex; align-items: flex-start; gap: 6px; }
+.farm-map-tools .btn-icon {
+    padding: 3px 9px; font-size: 15px; line-height: 1.25;
+    font-weight: 400; min-width: 32px; text-align: center;
+}
+/* 无可撤回 / 可回退时由脚本置灰（farm.js 的 syncHistoryButtons） */
+.farm-map-tools .btn-icon[disabled] { opacity: 0.4; cursor: default; background: var(--paper-2); border-color: var(--line-2); }
+.farm-map-hint { margin: 0 0 8px; font-size: 11px; color: var(--ink-3); line-height: 1.5; }
 
 .farm-map {
     position: relative; overflow: hidden;
