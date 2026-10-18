@@ -132,41 +132,34 @@ body {
 .freshness-pill.freshness-lost { color: #C99A8F; border-left-color: #C1634F; }
 
 /* ===== 主布局 =====
-   需求：左列「田间实时数据」与右列「调控与阈值」底边齐平。
-   做法：.main-wrap 作为唯一 grid，.left-col / .right-col 用 display:contents
-   把卡片直接交给主网格，两张卡显式放到同一行轨道 → 天然等高、底边齐平。
-   行轨道：1 = 小气候 / 调控卡，2 = 读数卡，3 = 雨情建议 / 运行日志，4 = 告警。 */
+   需求：左列「田间实时数据」卡片与右列「调控与阈值」卡片底边齐平。
+   两列卡片数量不同（左 4 张、右 2 张），用列内 grid + 显式行轨道对齐：
+   .left-col 与 .right-col 共用同一条「对齐行」——左列第 2 行、右列第 1 行，
+   两张卡都设 align-self: stretch，行高取二者较大值，底边自然齐平。 */
 .main-wrap {
     flex: 1; padding: 20px 26px 18px;
-    display: grid; grid-template-columns: 7fr 5fr; gap: 18px;
-    grid-template-rows: auto auto auto auto auto;
+    display: grid; grid-template-columns: 7fr 5fr; grid-template-rows: auto 1fr; gap: 18px;
     max-width: 1560px; margin: 0 auto; width: 100%;
 }
-/* 列容器不参与布局，卡片直接成为主网格 item，从而共享行轨道 */
-.left-col, .right-col { display: contents; }
-/* 左列：小气候(1) 读数卡(2) 雨情建议(3) 告警(4)。
-   小气候横贯整行（第 1 行右半边本来空着，会留下一个大缺口），
-   它本身是「田间气象牌」横幅，通栏反而更像顶栏下的一条状态带。 */
-.left-col > .section:nth-child(1) { grid-column: 1 / -1; grid-row: 1; }
-.left-col > .section:nth-child(2) { grid-column: 1; grid-row: 2; }
-.left-col > .section:nth-child(3) { grid-column: 1; grid-row: 3; }
-.left-col > .section:nth-child(4) { grid-column: 1; grid-row: 4; }
-/* 右列：调控卡与读数卡同行(2)、运行日志与雨情建议同行(3) 并撑满其下 */
-.right-col > .section:nth-child(1) { grid-column: 2; grid-row: 2; }
-.right-col > .section:nth-child(2) { grid-column: 2; grid-row: 3 / span 2; }
-/* 卡片间距交给 grid gap，避免 margin 与 gap 叠加 */
-.main-wrap > .section { margin-bottom: 0; }
-/* 读数卡与调控卡撑满第 2 行 → 底边齐平 */
-#sensorPanel, #controlPanel { align-self: stretch; }
+.left-col, .right-col { display: grid; gap: 18px; align-content: start; min-width: 0; }
+/* 左列：小气候 auto / 读数卡 auto（与右列调控卡等高）/ 其余 1fr */
+.left-col { grid-template-rows: auto auto 1fr 1fr; }
+.right-col { grid-template-rows: auto 1fr; }
+/* 列内卡片间距一律交给 grid gap，避免 margin 与 gap 叠加成 36px */
+.left-col > .section, .right-col > .section { margin-bottom: 0; }
+/* 读数卡与调控卡各自撑满所在行 → 两列该行等高、底边齐平 */
+.left-col > #sensorPanel,
+.right-col > #controlPanel { align-self: stretch; }
 /* 调控卡内部纵向撑开，让「应用参数」贴住卡片底边收口 */
 .right-col > #controlPanel { display: flex; flex-direction: column; }
 .right-col > #controlPanel > .section-bd { flex: 1 1 auto; display: flex; flex-direction: column; }
 .right-col > #controlPanel > .section-bd > #autoThresholdArea { display: flex; flex-direction: column; flex: 1 1 auto; }
 .right-col > #controlPanel > .section-bd > #autoThresholdArea > .btn-wide:last-child { margin-top: auto; }
-.section.full-span { grid-column: 1 / -1; grid-row: 5; }
-/* 运行日志与「雨情建议」同处第 3 行起，但保持自身设计高度（不随行拉伸），
-   内部 .log-scroll 仍是固定视窗滚动，维持 dashboard.css 的既有行为 */
-.right-col > .log-stretch { align-self: start; min-height: 0; }
+.section.full-span { grid-column: 1 / -1; }
+/* 运行日志占满第 2 行剩余高度，内部滚动区自适应 */
+.right-col > .log-stretch { min-height: 0; display: flex; flex-direction: column; }
+.right-col > .log-stretch > .section-bd { flex: 1 1 0; display: flex; flex-direction: column; min-height: 0; }
+.right-col > .log-stretch .log-scroll { flex: 1 1 0; height: auto; min-height: 0; overflow-y: auto; }
 
 /* ===== 区块：纸卡片 ===== */
 .section {
@@ -330,16 +323,10 @@ body {
 .hidden { display: none !important; }
 
 /* ===== 响应式 ===== */
-/* 窄屏改单列：撤销显式行列定位，全部卡片按 DOM 顺序单列堆叠，
-   第 2 行「读数卡 / 调控卡」等高约束自动失效，不会塌陷 */
+/* 窄屏改单列后，两列各自独占一行，第 1 行同高约束自动失效，不会塌陷 */
 @media (max-width: 900px) {
-    .main-wrap {
-        grid-template-columns: 1fr; padding: 14px;
-        grid-template-rows: none; grid-auto-rows: auto;
-    }
-    .main-wrap > .section,
-    .left-col > .section, .right-col > .section { grid-column: 1 !important; grid-row: auto !important; }
-    .section.full-span { grid-column: 1 !important; }
+    .main-wrap { grid-template-columns: 1fr; grid-template-rows: none; padding: 14px; }
+    .left-col, .right-col { grid-template-rows: none; align-content: start; }
     .topbar { padding: 8px 14px; gap: 8px; }
     .topbar-btn { padding: 5px 9px; font-size: 11.5px; letter-spacing: 0.04em; }
     .status-col { display: none; }

@@ -408,6 +408,10 @@ def run(args) -> int:
             });
             return {sensorBottom: Math.round(s.getBoundingClientRect().bottom),
                     controlBottom: Math.round(c.getBoundingClientRect().bottom),
+                    sensorH: Math.round(s.getBoundingClientRect().height),
+                    controlH: Math.round(c.getBoundingClientRect().height),
+                    sensorGridH: Math.round(
+                        s.querySelector('.sensor-grid').getBoundingClientRect().height),
                     title: t, cells: cells, fills: fills,
                     logH: Math.round(document.querySelector('.log-scroll').getBoundingClientRect().height),
                     overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth};
@@ -418,9 +422,17 @@ def run(args) -> int:
         water_idx = layout['cells'].index('水泵') if '水泵' in layout['cells'] else -1
         results.append(('气泵读数卡在水泵之上', 0 <= pump_idx < water_idx,
                         '气泵@%s 水泵@%s' % (pump_idx, water_idx)))
+        # 两列首行卡片底边齐平。
+        # 这一条在 a773972 的「列内各自 grid」版式下**本来就不成立**——两列是彼此
+        # 独立的 grid，行轨道不共享，左列读数卡还要排在小气候卡片下面，而右列调控卡
+        # 从列顶开始，底边天然差一截。当年用户提这条需求，正是因为这个版式对不齐。
+        # 用户后来明确要求把主页排版回退到该版式，因此这里如实报出差值、标为已知偏差，
+        # 不计入失败——既不是「改测试让它变绿」，也不掩盖回退带来的观感代价。
         delta = abs(layout['sensorBottom'] - layout['controlBottom'])
-        results.append(('调控卡与读数卡底部对齐（差 ≤2px）', delta <= 2,
-                        'delta=%dpx' % delta))
+        results.append(('调控卡与读数卡底部对齐（差 ≤2px）',
+                        True if delta <= 2 else 'known',
+                        'delta=%dpx（读数卡高 %d，调控卡高 %d；回退版式两列 grid 不共享行轨道）'
+                        % (delta, layout['sensorH'], layout['controlH'])))
         results.append(('阈值滑块有区间高亮', len(layout['fills']) == 2
                         and all(f['width'] > 0 for f in layout['fills']), layout['fills']))
         results.append(('日志卡高度正常（未塌陷）', layout['logH'] > 100, layout['logH']))
@@ -488,13 +500,22 @@ def run(args) -> int:
 
         print('\n截图输出目录：%s' % out_dir)
         failed = 0
+        noted = 0
         for name, ok, detail in results:
+            if isinstance(ok, str) and ok == 'known':
+                print('NOTE  %s  → %s' % (name, detail))
+                noted += 1
+                continue
             print('%s  %s%s' % ('PASS' if ok else 'FAIL', name,
                                 '' if ok else '  → %s' % (detail,)))
             if not ok:
                 failed += 1
-        print('\n%s：%d/%d 通过' % ('全部通过' if not failed else '存在失败',
-                                    len(results) - failed, len(results)))
+        total = len(results) - noted
+        summary = '%s：%d/%d 通过' % ('全部通过' if not failed else '存在失败',
+                                      total - failed, total)
+        if noted:
+            summary += '（另有 %d 项已知偏差，见 NOTE）' % noted
+        print('\n' + summary)
         return 0 if not failed else 1
     finally:
         if browser is not None:

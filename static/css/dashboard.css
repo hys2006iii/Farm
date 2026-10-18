@@ -20,18 +20,6 @@
     min-width: 0;
 }
 
-/* 读数卡与调控卡等高（base.css 里同处第 2 行轨道）后，卡片内会多出一段空白。
-   这里把多出来的高度按比例分给六个读数格、把 RORI 收口压到卡片底边，
-   让版面由「上半满、下半空」变成均匀铺满，读数也自然垂直居中。 */
-#sensorPanel { display: flex; flex-direction: column; }
-#sensorPanel > .section-bd {
-    flex: 1 1 auto;
-    display: flex; flex-direction: column; min-height: 0;
-}
-#sensorPanel .sensor-grid { flex: 1 1 auto; grid-auto-rows: 1fr; }
-#sensorPanel .sensor-cell { display: flex; flex-direction: column; justify-content: center; }
-#sensorPanel .rori-row { margin-top: auto; }
-
 .sensor-cell:nth-child(3n) { border-right: none; }
 .sensor-cell:nth-child(n+4) { border-bottom: none; }
 
@@ -295,10 +283,13 @@
 }
 .rori-approx-note:not([hidden]) { display: block; }
 
-/* ===== 日志：固定视窗内滚动，不撑破卡片 ===== */
+/* ===== 日志：固定视窗内滚动，不撑破卡片；
+   右列第 2 行有富余高度时随卡片一起长高（.log-stretch 由 base.css 撑满 1fr 行） ===== */
 .log-stretch { flex: 0 0 auto; }
 .log-stretch .section-bd { padding-bottom: 8px; }
 .log-stretch .log-scroll { height: 236px; overflow-y: auto; }
+/* 看板右列：日志卡片撑满剩余行高，滚动区跟着长高，不再留大片空白 */
+.right-col > .log-stretch .log-scroll { height: auto; min-height: 236px; }
 .log-item { border-left-width: 2px; padding: 5px 8px 5px 10px; }
 .log-item .log-time { font-variant-numeric: tabular-nums; }
 .log-item .log-msg { font-size: 12.5px; }
