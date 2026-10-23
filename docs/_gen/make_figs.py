@@ -456,7 +456,9 @@ def g_edgecloud():
         "断网自治：云端不可达 → 边端按 NVS 缓存的 L1 阈值继续执行，L2 红线强控始终在本地生效；"
         "联网后补传数据，并以云端最新策略覆盖本地缓存",
         fc=GRAY_L, ec=GRAY, fs=9.5, tc=INK, lw=1.2, r=0.08)
-    label(ax, 11.62, 2.35, "虚线红框\n= 设计中能力", fs=9, color=RED, ha="center")
+    ax.add_patch(Rectangle((0.80, 1.16), 0.30, 0.22, facecolor=RED_L, edgecolor=RED,
+                           lw=1.2, ls="--", zorder=6))
+    label(ax, 1.22, 1.27, "虚线红框 = 设计中能力（尚未落地）", fs=9, color=RED, ha="left")
     save(f, "g_edgecloud.png")
 
 
@@ -477,7 +479,7 @@ def g_deploy():
     label(ax, 6.05, 6.52, "HTTP", fs=9, color=GRAY)
 
     # SQLite
-    box(ax, 5.40, 2.60, 3.30, 0.95, "SQLite 单文件（WAL）\nqinghe.db · 12 张表", fc=GRAY_L,
+    box(ax, 5.40, 2.60, 3.02, 0.95, "SQLite 单文件（WAL）\nqinghe.db · 12 张表", fc=GRAY_L,
         ec=GRAY, fs=10)
     arrow(ax, (7.95, 5.62), (7.95, 3.55), color=GREEN, lw=1.8)
     label(ax, 8.28, 4.55, "读写\n事务", fs=9, color=GRAY)
@@ -488,9 +490,10 @@ def g_deploy():
     box(ax, 5.60, 1.10, 2.20, 0.95, "paho-mqtt 客户端\n每用户一条连接", fc=LIGHT, ec=GREEN, fs=10)
     arrow(ax, (2.70, 3.08), (3.05, 3.08), color=GRAY, lw=1.8, style="<|-|>", ms=11)
     arrow(ax, (5.25, 3.05), (5.60, 2.60), color=GRAY, lw=1.8, style="<|-|>", ms=11, rad=-0.12)
-    arrow(ax, (6.70, 2.05), (6.70, 5.62), color=MID, lw=1.8, style="-|>", ms=14)
-    label(ax, 6.32, 4.30, "遥测入队", fs=9, color=MID, rot=90)
-    label(ax, 4.10, 3.28, "MQTT / TLS", fs=9, color=GRAY)
+    line(ax, [(7.80, 1.80), (8.62, 1.80)], color=MID, lw=1.8, z=6)
+    line(ax, [(8.62, 1.80), (8.62, 5.32)], color=MID, lw=1.8, z=6)
+    arrow(ax, (8.62, 5.32), (8.16, 5.60), color=MID, lw=1.8, style="-|>", ms=13)
+    label(ax, 3.12, 3.72, "MQTT / TLS", fs=9, color=GRAY, ha="left")
 
     # 右侧外部服务
     box(ax, 8.90, 2.85, 3.10, 4.05, "", fc=PALE, ec=GREEN, lw=1.6, r=0.12)
@@ -845,9 +848,8 @@ def g_autocontrol():
 
     # 互斥闸
     box(ax, 0.90, 3.02, 10.80, 0.62,
-        "互斥：mode = auto 时前端 tick 不再控泵；mode = frontend 时服务端只读不下发",
+        "互斥（二选一）：mode = auto 时前端 tick 不再控泵；mode = frontend 时服务端只读不下发",
         fc=RED_L, ec=RED, fs=9.5, tc=INK, lw=1.3, r=0.07, ls="--")
-    label(ax, 11.85, 3.33, "二选一", fs=9.5, color=RED, weight="bold")
 
     label(ax, 0.55, 2.55, "② 前端 autoControl 回路（浏览器内定时器）", fs=10.5,
           color=DEEP, weight="bold", ha="left")
@@ -910,7 +912,7 @@ def g_hitl():
     # TTL 时间轴
     box(ax, 0.55, 0.75, 9.55, 1.05, "", fc=PALE, ec=SOFT, lw=1.2, r=0.08)
     label(ax, 0.80, 1.55, "预案 TTL 时间轴", fs=10, color=DEEP, weight="bold", ha="left")
-    line(ax, [(1.30, 1.15), (9.70, 1.15)], color=GRAY, lw=2.0)
+    line(ax, [(1.30, 1.15), (9.70, 1.15)], color=GRAY, lw=2.0, z=6)
     for x, txt in ((1.30, "0 s 生成"), (5.50, "300 s 提醒"), (9.70, "600 s 过期")):
         ax.add_patch(Circle((x, 1.15), 0.055, facecolor=GREEN, edgecolor=GREEN, zorder=6))
         label(ax, x, 0.92, txt, fs=9, color=GRAY)
@@ -1098,7 +1100,7 @@ def x_thread():
         ("主请求线程\nwaitress × 8", ORANGE_L, ORANGE,
          ["waitress worker", "Flask 路由 + 鉴权", "DAO 读写 SQLite"],
          "连接按线程持有；WAL 允许读并发"),
-        ("MQTT 回调线程\n每用户一条", GREEN, LIGHT,
+        ("MQTT 回调线程\n每用户一条", LIGHT, GREEN,
          ["on_message", "parse_mqtt_payload", "put_nowait / emit"],
          "回调绝不碰磁盘，< 5 ms 返回"),
         ("落库线程\nHistoryWriter", ORANGE_L, ORANGE,
@@ -1107,7 +1109,7 @@ def x_thread():
         ("日志线程\nlogbook", ORANGE_L, ORANGE,
          ["日志入队", "批量写 logs 表", "异常吞掉不抛"],
          "有界队列 1000，满则丢弃"),
-        ("巡检线程\nheartbeat", GREEN, LIGHT,
+        ("巡检线程\nheartbeat", LIGHT, GREEN,
          ["sleep 定时", "扫 last_seen", "置离线 + 告警"],
          "threading.RLock 保护共享态"),
     ]
@@ -1167,11 +1169,9 @@ def x_migration():
     arrow(ax, (5.25, 4.75), (5.25, 3.10), color=ORANGE, lw=1.8, ms=12)
     arrow(ax, (5.25, 2.55), (5.25, 2.25), color=GREEN, lw=1.6, ms=11)
 
-    # 逐列循环
-    ax.add_patch(Arc((5.25, 3.92), 1.30, 0.62, theta1=200, theta2=340, color=ORANGE,
-                     lw=1.4, zorder=6))
-    arrow(ax, (4.62, 3.72), (4.95, 3.62), color=ORANGE, lw=1.4, ms=10, style="-|>")
-    label(ax, 6.15, 3.92, "循环：逐列判存在 → 缺失才 ALTER", fs=9, color=ORANGE, ha="left")
+    # 逐列循环说明
+    label(ax, 5.55, 4.40, "循环：逐列 PRAGMA 判存在 → 缺失才 ALTER", fs=9, color=ORANGE,
+          ha="left")
 
     box(ax, 8.05, 4.55, 3.00, 1.60, "", fc=PALE, ec=ORANGE, lw=1.2, r=0.07, ls="--")
     label(ax, 8.20, 5.95, "幂等三原则", fs=10, color=ORANGE, weight="bold", ha="left")
@@ -1340,16 +1340,15 @@ def x_histwriter():
            ("落库线程", "取批 ≤ 200 条", 8.70, LIGHT, GREEN),
            ("SQLite", "批量 INSERT", 11.40, LIGHT, GREEN)]
     for name, desc, x, fc, ec in row:
-        box(ax, x, 5.10, 2.30, 0.95, "%s\n%s" % (name, desc), fc=fc, ec=ec, fs=10, r=0.08)
+        box(ax, x, 5.10, 2.25, 0.95, "%s\n%s" % (name, desc), fc=fc, ec=ec, fs=10, r=0.08)
     for i in range(4):
-        x = 0.60 + i * 2.70
-        arrow(ax, (x + 2.30, 5.575), (x + 2.70, 5.575), color=GREEN, lw=1.8, ms=12)
+        x = 0.55 + i * 2.62
+        arrow(ax, (x + 2.25, 5.575), (x + 2.62, 5.575), color=GREEN, lw=1.8, ms=12)
 
     # 队列内部示意
     for i in range(6):
-        ax.add_patch(Rectangle((6.05 + i * 0.36, 5.28), 0.30, 0.32, facecolor=WHITE,
+        ax.add_patch(Rectangle((5.93 + i * 0.35, 5.15), 0.28, 0.26, facecolor=WHITE,
                                edgecolor=ORANGE, lw=1.0, zorder=6))
-    label(ax, 7.15, 4.98, "环形缓冲：满则 popleft 丢最旧", fs=9, color=ORANGE)
 
     # 溢出路径
     box(ax, 5.60, 3.30, 3.10, 0.75, "队满 → 丢弃最旧一条\nput_nowait 永不阻塞", fc=RED_L,
@@ -1363,12 +1362,12 @@ def x_histwriter():
     arrow(ax, (9.85, 5.10), (9.85, 4.22), color=GRAY, lw=1.2, ms=10, ls=":")
 
     # 红线
-    box(ax, 0.60, 6.55, 12.10, 0.85,
+    box(ax, 0.55, 6.30, 12.55, 0.62,
         "红线：MQTT 回调线程内绝不允许出现 commit / 网络 IO / 大循环 —— 只允许一次 put_nowait，"
         "阻塞即丢数据、拖慢整条 MQTT 连接",
         fc=RED_L, ec=RED, fs=9.5, tc=INK, lw=1.4, r=0.07)
 
-    box(ax, 0.60, 1.35, 12.10, 1.35,
+    box(ax, 0.55, 1.35, 12.55, 1.35,
         "背压策略：队列满时牺牲最旧的一条而不是阻塞生产者，保证实时性优先；"
         "落库线程空闲时阻塞在队列 get(timeout=1) 上，既省 CPU 又能被优雅关闭。\n"
         "统计口径：丢弃条数单独计数并写入运行日志，便于评估落库吞吐是否够用。",
@@ -1455,20 +1454,19 @@ def x_alertdedup():
     ax.add_patch(Rectangle((x0, yA - 0.42), X(60) - x0, 0.84, facecolor=ORANGE_L,
                            edgecolor=ORANGE, lw=1.2, zorder=2, alpha=0.55))
     line(ax, [(x0, yA), (x1, yA)], color=GRAY, lw=2.2, z=4)
-    label(ax, (x0 + X(60)) / 2, yA + 0.52, "冷却窗口 60 s：同 key 一律丢弃", fs=9.5,
+    label(ax, (x0 + X(60)) / 2, yA + 0.26, "冷却窗口 60 s：同 key 一律丢弃", fs=9.5,
           color=ORANGE, weight="bold")
 
     ev = [(0, "首次告警 A", "推送 + 记录 t = 0", True),
           (20, "A 再次出现", "命中冷却 → 丢弃", False),
-          (59, "A 又出现", "仍丢弃", False),
           (60, "60 s 整", "允许再次推送", True)]
     for t, head, desc, up in ev:
         xv = X(t)
         ax.add_patch(Circle((xv, yA), 0.075, facecolor=GREEN if up else RED,
                             edgecolor=WHITE, lw=1.2, zorder=6))
         if up:
-            line(ax, [(xv, yA + 0.10), (xv, yA + 0.30)], color=GRAY, lw=1.0, z=5)
-            label(ax, xv, yA + 0.36, "%s\n%s" % (head, desc), fs=9, color=GREEN)
+            line(ax, [(xv, yA + 0.10), (xv, yA + 0.44)], color=GRAY, lw=1.0, z=5)
+            label(ax, xv, yA + 0.66, "%s\n%s" % (head, desc), fs=9, color=GREEN)
         else:
             line(ax, [(xv, yA - 0.10), (xv, yA - 0.34)], color=GRAY, lw=1.0, z=5)
             label(ax, xv, yA - 0.62, "%s\n%s" % (head, desc), fs=9, color=RED)
@@ -1507,7 +1505,7 @@ def x_realtime():
             ("hw_data", "下行", "type = device_status：在线状态", "room = str(uid)"),
             ("send_command", "上行", "{ device, action }：手动控泵", "由浏览器发往服务端")]
     for i, r in enumerate(data):
-        y = 6.62 - i * 0.35
+        y = 6.97 - i * 0.35
         for j, cell in enumerate(r):
             ax.text(cols[j] + 0.14, y, cell, ha="left", va="center", fontsize=9,
                     color=INK if j != 1 else (GREEN if cell == "下行" else ORANGE),
@@ -1532,9 +1530,8 @@ def x_realtime():
         label(ax, x + 1.72, 3.28, "只收本房间事件", fs=9, color=GRAY)
 
     arrow(ax, (4.12, 3.95), (4.52, 3.95), color=GREEN, lw=1.7, ms=12)
-    arrow(ax, (2.60, 3.55), (2.60, 3.10), color=GRAY, lw=1.2, ms=10, ls=":")
-    line(ax, [(2.60, 3.10), (8.35, 3.10)], color=GRAY, lw=1.2, ls=":")
-    arrow(ax, (8.35, 3.10), (8.35, 2.93), color=GRAY, lw=1.2, ms=10, ls=":")
+    label(ax, 2.35, 3.18, "同一函数按 uid 选房：uid=1 → room 1，uid=2 → room 2", fs=9,
+          color=GRAY)
 
     # 隔离边界
     line(ax, [(8.35, 2.95), (8.35, 5.80)], color=RED, lw=1.6, ls="--")
@@ -1558,7 +1555,7 @@ def x_ai_fallback():
     cols = [(0.55, 2.25), (2.95, 1.05), (4.15, 2.55), (6.90, 3.35), (10.40, 2.25)]
     heads = ["外部服务", "超时", "失败形态", "兜底返回", "调用方感受"]
     for (x, w), h in zip(cols, heads):
-        box(ax, x, 6.95, w, 0.50, h, fc=DEEP, ec=DEEP, fs=10, tc=WHITE, weight="bold",
+        box(ax, x, 7.30, w, 0.44, h, fc=DEEP, ec=DEEP, fs=10, tc=WHITE, weight="bold",
             r=0.05)
 
     rows = [
@@ -1572,14 +1569,14 @@ def x_ai_fallback():
          "地图仍可显示坐标", 2.35),
     ]
     for name, to, fail, fallback, feel, y in rows:
-        box(ax, cols[0][0], y, cols[0][1], 1.05, name, fc=LIGHT, ec=GREEN, fs=10, r=0.07)
+        box(ax, cols[0][0], y, cols[0][1], 0.98, name, fc=LIGHT, ec=GREEN, fs=10, r=0.07)
         box(ax, cols[1][0], y + 0.28, cols[1][1], 0.50, to, fc=ORANGE_L, ec=ORANGE, fs=10,
             weight="bold", r=0.06)
-        box(ax, cols[2][0], y, cols[2][1], 1.05, fail, fc=WHITE, ec=GRAY, fs=8.8, lw=1.2,
+        box(ax, cols[2][0], y, cols[2][1], 0.98, fail, fc=WHITE, ec=GRAY, fs=8.8, lw=1.2,
             r=0.07)
-        box(ax, cols[3][0], y, cols[3][1], 1.05, fallback, fc=ORANGE_L, ec=ORANGE, fs=8.8,
+        box(ax, cols[3][0], y, cols[3][1], 0.98, fallback, fc=ORANGE_L, ec=ORANGE, fs=8.8,
             lw=1.2, r=0.07)
-        box(ax, cols[4][0], y, cols[4][1], 1.05, feel, fc=PALE, ec=SOFT, fs=8.8, tc=INK,
+        box(ax, cols[4][0], y, cols[4][1], 0.98, feel, fc=PALE, ec=SOFT, fs=8.8, tc=INK,
             lw=1.1, r=0.07)
         arrow(ax, (cols[1][0] + cols[1][1], y + 0.52), (cols[2][0], y + 0.52), color=GRAY,
               lw=1.2, ms=9)
@@ -1611,7 +1608,7 @@ def x_http_pipeline():
              ("⑤ 业务层", "纯函数与状态机"),
              ("⑥ DAO", "参数化 SQL 读写"),
              ("⑦ 响应组装", "jsonify 统一形状")]
-    ys = [8.30, 7.45, 6.60, 5.75, 4.90, 4.05, 3.20]
+    ys = [7.95, 7.10, 6.25, 5.40, 4.55, 3.70, 2.85]
     for (name, desc), y in zip(steps, ys):
         box(ax, cx, y, cw, 0.62, "%s\n%s" % (name, desc), fc=LIGHT, ec=GREEN, fs=9.5,
             r=0.07)
@@ -1620,21 +1617,22 @@ def x_http_pipeline():
               lw=1.5, ms=11)
 
     # 短路分支
-    box(ax, 7.40, 6.55, 3.45, 0.70, "401 / 403\n未登录或权限不足", fc=RED_L, ec=RED,
+    box(ax, 7.40, 6.21, 3.45, 0.70, "401 / 403\n未登录或权限不足", fc=RED_L, ec=RED,
         fs=9.5, lw=1.3, r=0.07)
-    arrow(ax, (cx + cw, 6.91), (7.38, 6.91), color=RED, lw=1.4, ms=11, ls="--")
-    box(ax, 7.40, 5.70, 3.45, 0.70, "400 / 422\n入参非法，附中文原因", fc=RED_L, ec=RED,
+    arrow(ax, (cx + cw, 6.56), (7.38, 6.56), color=RED, lw=1.4, ms=11, ls="--")
+    box(ax, 7.40, 5.36, 3.45, 0.70, "400 / 422\n入参非法，附中文原因", fc=RED_L, ec=RED,
         fs=9.5, lw=1.3, r=0.07)
-    arrow(ax, (cx + cw, 6.06), (7.38, 6.06), color=RED, lw=1.4, ms=11, ls="--")
-    label(ax, 9.10, 6.50, "短路：不进入业务层", fs=9, color=RED)
+    arrow(ax, (cx + cw, 5.71), (7.38, 5.71), color=RED, lw=1.4, ms=11, ls="--")
+    label(ax, 9.10, 5.12, "短路：鉴权 / 校验失败即返回，不进入业务层", fs=9, color=RED)
 
     # 统一响应
     box(ax, 1.60, 1.35, 3.30, 1.10, "{'status': 'success',\n'data': {...}}", fc=LIGHT,
         ec=GREEN, fs=9.5, r=0.08)
     box(ax, 5.30, 1.35, 3.30, 1.10, "{'error': '中文原因'}", fc=RED_L, ec=RED, fs=9.5,
         lw=1.3, r=0.08)
-    arrow(ax, (6.40, 3.20), (3.25, 2.47), color=GREEN, lw=1.4, ms=11, rad=-0.15)
-    label(ax, 4.75, 2.85, "统一响应形状", fs=9.5, color=DEEP, weight="bold")
+    arrow(ax, (6.40, 2.85), (3.25, 2.47), color=GREEN, lw=1.4, ms=11, rad=-0.15)
+    label(ax, 4.95, 2.66, "统一响应形状", fs=9.5, color=DEEP, weight="bold",
+          bbox=dict(boxstyle="round,pad=0.2", fc=WHITE, ec="none"))
 
     box(ax, 0.55, 0.45, 10.30, 0.62,
         "约定：任何分支都返回 JSON，不返回 HTML 错误页；状态码与 body 语义必须一致。",
@@ -1690,53 +1688,68 @@ def x_plan_ttl():
 
 @fig("x_tick.png", "图 13-1 前端统一 tick 调度与批量 DOM 更新")
 def x_tick():
-    W, H = 13.4, 9.0
+    W, H = 13.4, 10.2
     f, ax = canvas(W, H)
     title(ax, W, H, "图 13-1  前端统一 tick 调度与批量 DOM 更新",
           "一个 500 ms 主时钟驱动全部任务，所有 DOM 写入合并到一次 flushDom")
 
-    box(ax, 0.55, 6.95, 2.55, 0.85, "setInterval\n每 500 ms 一次", fc=ORANGE_L, ec=ORANGE,
+    box(ax, 0.55, 8.30, 2.55, 0.80, "setInterval\n每 500 ms 一次", fc=ORANGE_L, ec=ORANGE,
         fs=10, r=0.08)
-    arrow(ax, (3.10, 7.375), (3.50, 7.375), color=GREEN, lw=1.7, ms=12)
-    box(ax, 3.52, 6.95, 3.05, 0.85, "累加器\nacc[name] += dt", fc=LIGHT, ec=GREEN, fs=10,
+    arrow(ax, (3.10, 8.70), (3.50, 8.70), color=GREEN, lw=1.7, ms=12)
+    box(ax, 3.52, 8.30, 3.05, 0.80, "累加器\nacc[name] += dt", fc=LIGHT, ec=GREEN, fs=10,
         r=0.08)
 
+    label(ax, 6.95, 8.22, "任务表：到期才执行，单任务抛错不影响其它任务", fs=9.5,
+          color=DEEP, weight="bold", ha="left")
+
+    box(ax, 0.55, 4.10, 5.70, 3.20,
+        "function tick(now) {\n"
+        "  const dt = now - last;\n"
+        "  last = now;\n"
+        "  for (const [name, period] of TASKS) {\n"
+        "    acc[name] += dt;\n"
+        "    if (acc[name] < period) continue;\n"
+        "    acc[name] = 0;\n"
+        "    try { run(name); }\n"
+        "    catch (e) { console.warn(name, e); }\n"
+        "  }\n"
+        "  flushDom();          // 合并写入\n"
+        "}",
+        fc=PALE, ec=SOFT, fs=9, tc=INK, lw=1.2, r=0.07, ha="left", ls_spacing=1.6)
     tasks = [("dom", 500, "重绘读数与状态色"), ("clock", 1000, "时钟与倒计时"),
              ("chart", 2000, "三条趋势曲线"), ("heartbeat", 5000, "设备在线探测"),
              ("persist", 30000, "批量落库 / 自动保存")]
     for i, (name, ms, desc) in enumerate(tasks):
-        y = 5.60 - i * 1.02
-        box(ax, 6.95, y, 2.35, 0.80, "%s\n每 %d ms" % (name, ms), fc=WHITE, ec=GREEN,
+        y = 7.30 - i * 0.90
+        box(ax, 6.95, y, 2.35, 0.78, "%s\n每 %d ms" % (name, ms), fc=WHITE, ec=GREEN,
             fs=9.5, lw=1.4, r=0.07)
-        label(ax, 9.55, y + 0.40, desc, fs=9, color=GRAY, ha="left")
-        arrow(ax, (5.20, 5.98), (6.93, y + 0.40), color=GREEN, lw=1.3, ms=10, rad=0.05)
-        box(ax, 9.50, y, 0.85, 0.80, "try\ncatch", fc=RED_L, ec=RED, fs=8.5, lw=1.1,
-            r=0.06)
-        arrow(ax, (9.30, y + 0.40), (9.48, y + 0.40), color=GRAY, lw=1.1, ms=9)
+        label(ax, 9.55, y + 0.39, desc, fs=9, color=GRAY, ha="left")
+        arrow(ax, (5.35, 8.30), (6.93, y + 0.39), color=GREEN, lw=1.3, ms=10, rad=0.05)
 
-    label(ax, 6.95, 6.55, "任务表：到期才执行，单任务抛错不影响其它任务", fs=9,
-          color=DEEP, weight="bold", ha="left")
+    box(ax, 11.30, 3.60, 1.95, 4.48,
+        "每个任务\n独立 try / catch\n\n抛错只记 console\n不中断 tick\n主循环",
+        fc=RED_L, ec=RED, fs=9.5, lw=1.3, r=0.08, ls="--")
 
     # 下半：批量 DOM
-    label(ax, 0.55, 3.35, "批量 DOM 更新", fs=11, color=DEEP, weight="bold", ha="left")
-    box(ax, 0.55, 1.75, 3.60, 1.30,
-        "pending = {\n  fields, styles,\n  pumps, flags, sliders\n}", fc=ORANGE_L, ec=ORANGE,
-        fs=9, r=0.07)
-    arrow(ax, (4.15, 2.40), (4.65, 2.40), color=GREEN, lw=1.6, ms=12)
-    box(ax, 4.67, 1.75, 2.55, 1.30, "flushDom()\n一次性写 DOM", fc=LIGHT, ec=GREEN,
+    label(ax, 0.55, 2.98, "批量 DOM 更新", fs=11, color=DEEP, weight="bold", ha="left")
+    box(ax, 0.55, 1.45, 3.60, 1.15,
+        "pending = {\n  fields, styles,\n  pumps, flags, sliders\n}", fc=ORANGE_L,
+        ec=ORANGE, fs=9, r=0.07)
+    arrow(ax, (4.15, 2.02), (4.65, 2.02), color=GREEN, lw=1.6, ms=12)
+    box(ax, 4.67, 1.45, 2.55, 1.15, "flushDom()\n一次性写 DOM", fc=LIGHT, ec=GREEN,
         fs=9.5, r=0.07)
-    arrow(ax, (7.22, 2.40), (7.72, 2.40), color=GREEN, lw=1.6, ms=12)
+    arrow(ax, (7.22, 2.02), (7.72, 2.02), color=GREEN, lw=1.6, ms=12)
 
-    box(ax, 7.74, 2.10, 2.55, 0.60, "el.__qhText\n与上次值比较", fc=WHITE, ec=GRAY, fs=9,
+    box(ax, 7.74, 1.78, 2.55, 0.52, "el.__qhText\n与上次值比较", fc=WHITE, ec=GRAY, fs=9,
         lw=1.2, r=0.06)
-    box(ax, 10.50, 2.60, 2.40, 0.55, "相同 → 跳过", fc=GRAY_L, ec=GRAY, fs=9, lw=1.1,
+    box(ax, 10.55, 2.25, 2.35, 0.50, "相同 → 跳过", fc=GRAY_L, ec=GRAY, fs=9, lw=1.1,
         r=0.06)
-    box(ax, 10.50, 1.75, 2.40, 0.55, "不同 → 写入并缓存", fc=LIGHT, ec=GREEN, fs=9,
+    box(ax, 10.55, 1.45, 2.35, 0.50, "不同 → 写入并缓存", fc=LIGHT, ec=GREEN, fs=9,
         lw=1.2, r=0.06)
-    arrow(ax, (10.29, 2.42), (10.48, 2.80), color=GRAY, lw=1.2, ms=9, rad=-0.12)
-    arrow(ax, (10.29, 2.38), (10.48, 2.05), color=GREEN, lw=1.2, ms=9, rad=0.12)
+    arrow(ax, (10.31, 2.08), (10.53, 2.50), color=GRAY, lw=1.2, ms=9, rad=-0.12)
+    arrow(ax, (10.31, 1.98), (10.53, 1.70), color=GREEN, lw=1.2, ms=9, rad=0.12)
 
-    box(ax, 0.55, 0.55, 12.35, 0.85,
+    box(ax, 0.55, 0.45, 12.35, 0.75,
         "为什么要合并：500 ms 内可能产生几十次读数更新，逐个写 DOM 会触发多次重排；"
         "先在对象里累积，最后一次写入，长列表只更新可见行。",
         fc=GRAY_L, ec=GRAY, fs=9.5, tc=INK, lw=1.1, r=0.07)
@@ -1874,3 +1887,46 @@ def x_test_layers():
 
 
 # @@APPEND@@
+
+
+# ================================================================ 自检与入口
+def verify(names=None):
+    """逐个打开 PNG，检查宽度、非纯白（标准差）与文件体积，打印一张表。"""
+    from PIL import Image
+
+    targets = [n for n, _c, _f in ORDER if names is None or n in names]
+    rows, all_ok = [], True
+    for name in targets:
+        path = os.path.join(OUT_DIR, name)
+        if not os.path.exists(path):
+            print("  [缺失] %s" % name)
+            all_ok = False
+            continue
+        with Image.open(path) as im:
+            w, h = im.size
+            gray = np.asarray(im.convert("L"), dtype=np.float32)
+        sd = float(gray.std())
+        kb = os.path.getsize(path) / 1024.0
+        ok = (w >= 1600) and (sd > 5.0) and (kb > 30.0)
+        all_ok = all_ok and ok
+        rows.append((name, w, h, kb, sd, ok))
+
+    print("\n%-22s %-13s %9s %8s  %s" % ("文件名", "宽×高", "KB", "标准差", "结果"))
+    print("-" * 68)
+    for name, w, h, kb, sd, ok in rows:
+        print("%-22s %-13s %9.1f %8.2f  %s"
+              % (name, "%d×%d" % (w, h), kb, sd, "通过" if ok else "未通过"))
+    print("-" * 68)
+    print("合计 %d 张，%s" % (len(rows), "全部通过" if all_ok else "存在未通过项"))
+    return all_ok
+
+
+if __name__ == "__main__":
+    keys = [a.lower() for a in sys.argv[1:]]
+    picked = [(n, c, fn) for n, c, fn in ORDER
+              if not keys or any(k in n.lower() or k in c.lower() for k in keys)]
+    print("开始生成 %d / %d 张图（dpi=%d）" % (len(picked), len(ORDER), DPI))
+    for _name, _caption, _fn in picked:
+        print("[%s] %s" % (_name, _caption))
+        _fn()
+    verify({n for n, _c, _f in picked})
