@@ -1,0 +1,624 @@
+﻿======================================================================
+FILE qinghe/__init__.py  (141 lines)
+DOC: 青禾智灌 —— 业务包入口与应用工厂。
+  CONST _SECRET_WARN = '安全警告：未配置环境变量 FARM_SECRET_KEY，已使用本进程随机密钥。重启后登录态（会话 / JWT）将全部失效；生产请运行 tools/gen_secret.py 生成密钥并写入 .env。'
+  def _warn_default_secret()  # 未显式配置密钥时打印一次显著警告（不改变任何启动行为）。
+  def _register_security_headers(app)  # 注册统一安全响应头（含 CSP）。
+  def _register_blueprints(app)  # 注册全部 HTTP 蓝图，URL 前缀与旧版 app.py 逐字保持一致。
+  def _register_error_handlers(app)  # 兜底错误处理：避免未捕获异常把 500 堆栈泄露给客户端。
+  def create_app(init_storage)  # 应用工厂：装配并返回 `(app, socketio)`。
+======================================================================
+FILE qinghe/advice.py  (133 lines)
+DOC: 青禾智灌 —— 七日灌溉建议。
+  CONST LEVEL_LABELS = {'irrigate': '需要灌溉', 'wait_rain': '控水等雨', 'watch': '观察待定', 'hold': '正常维持'}
+  CONST RAIN_EFFECTIVE_MM = 5.0
+  CONST SOIL_GAP_PCT = 3.0
+  CONST RAIN_TINY_MM = 1.0
+  def _level_for(precip, soil_pct, eff_lower, water_mm, wl_down)  # 按单日降雨与当前墒情判定建议级别。
+  def _text_for(level, precip, soil_pct, water_mm, eff_lower)  # 生成一句可执行的说明（数字取整，避免假精确）。
+  def build_calendar(daily_forecast, water_mm, soil_pct, thresholds, dynamic, today, has_telemetry)  # 生成逐日灌溉建议。
+  def summarize(calendar, dynamic, has_forecast, has_telemetry)  # 把逐日建议压成一句话总览（前端卡片副标题）。
+======================================================================
+FILE qinghe/ai.py  (272 lines)
+DOC: 青禾智灌 —— AI 助手对话代理。
+  CONST SYSTEM_PROMPT = '你是一个智能灌溉与水利控制系统助手，请简洁专业地回答中文问题。'
+  def _wrap(content)  # 把纯文本包装成前端需要的 choices 结构。
+  CONST SNAPSHOT_MAX_CHARS = 1800
+  def _num(value, digits, unit)  # 把可能为 None 的数值格式化成 `12.3 mm` 形式。
+  def _trend(points, digits)  # 把按时间正序的数值序列压缩成「首→末」趋势描述。
+  def build_snapshot(uid)  # 拼装「实时快照」文本，随用户提问一起交给 AI。
+  def load_ai_config(uid)  # 读取用户的 AI 配置行（ai_domain / ai_key），不存在返回 None。
+  def normalize_base_url(ai_domain)  # 规整 AI 接口基址：空值取默认；deepseek 官方误填 http 时自动纠正为 https。
+  def build_chat_request(ai_domain, user_msg)  # 构造 (url, headers, body)。
+  def is_public_http_url(url)  # 判断 URL 是否为 http(s) 且主机不是本机/私网/链路本地/元数据地址。
+  def chat(ai_domain, ai_key, user_msg, context)  # 调用 AI 接口并返回可直接 jsonify 的 dict。
+======================================================================
+FILE qinghe/alert_center.py  (398 lines)
+DOC: 青禾智灌 —— NF1 服务端告警中心。
+  CONST ALERT_LEVELS = ('info', 'warning', 'danger')
+  CONST ALERT_CODES = ('soil_low', 'soil_high', 'water_low', 'water_high', 'rori_medium', 'rori_high', 'device_offline', 'plan_pending', 'auto
+  CONST CONTENT_MAX_LEN = 500
+  CONST MAX_LIMIT = 500
+  CONST PUSH_RETRY_DELAYS = (0.0, 0.5, 1.0)
+  CONST _CODE_TITLES = {'soil_low': '土壤湿度过低', 'soil_high': '土壤湿度过高', 'water_low': '水位过低', 'water_high': '水位过高', 'rori_medium': 'RORI 中度缺氧', 'ro
+  CONST _PUSH_THREADS = []
+  def _ensure_schema()  # 懒建 `alerts` 表与 `idx_alerts_user_ts` 索引（按当前库路径幂等）。
+  def _reset_dedupe()  # 清空冷却状态（切换数据库或测试隔离时调用）。
+  def _now_ms()  # 当前毫秒时间戳。
+  def _as_int(value, default)  # 尽力转 int，失败返回默认值。
+  def _clamp_limit(limit, default)  # 把 limit 收敛到 [1, MAX_LIMIT]，非法值使用默认值。
+  def _normalize_level(level)  # 归一化告警级别；`warn`/`danger` 别名与未知值都能安全落库。
+  def _normalize_code(code)  # 归一化告警类型码；空值回退为 `auto_action`。
+  def _clip_content(content)  # 归一化告警正文：去首尾空白并截断到 500 字符。
+  def normalize_alert_text(content)  # 告警正文指纹：压缩空白 + 把数字抹成 `#`。
+  def _dedupe_key(uid, code, content)  # 冷却去重键：`(uid, code, 正文指纹)`。
+  def _insert_alert(user_id, level, code, content)  # 落库一条告警，返回自增 id；失败时记录日志并返回 0。
+  def push_alert(uid, level, code, content)  # 写入一条服务端告警并异步推送 webhook。
+  def _push_with_retry(uid, title, content)  # 后台推送 webhook：失败按 0.5s / 1.0s 退避重试 2 次，最终失败仅记录。
+  def list_alerts(uid, limit, since_ts)  # 按 `ts DESC` 查询告警，`rid` 为 1 基序号。
+  def ack_alert(uid, alert_id)  # 确认自己的告警；非本人告警、参数非法或不存在时返回 False。
+  def ack_all_alerts(uid, codes)  # 一键确认该用户的全部未确认告警，返回本次确认条数。
+  def prune_alerts(keep_days)  # 删除早于 `keep_days` 天的告警，返回删除行数（幂等）。
+  def _code_for_message(message, level)  # 把告警正文映射为契约告警类型码（**兼容回退路径**）。
+  def _code_of(item, message, level)  # 取候选告警的类型码：优先稳定 `code` 字段，缺失才回退文案映射。
+  def evaluate_and_push(uid, soil_pct, water_mm, rori, humi_lower, humi_upper, water_lower, water_upper)  # 按既有 `alerts.evaluate_alerts()` 判定候选并逐条推送。
+======================================================================
+FILE qinghe/alerts.py  (104 lines)
+DOC: 青禾智灌 —— 告警判定与 webhook 推送。
+  CONST ALERT_KEYWORD = ...
+  def notify_webhook(uid, title, content)  # 推送告警到用户配置的 webhook（钉钉/企业微信/飞书 通用格式，带兜底适配）。
+  class AlertDeduper
+     .__init__(self, cooldown)
+     .should_emit(self, key, now)
+     .reset(self)
+  def evaluate_alerts(soil_pct, water_mm, humi_lower, humi_upper, water_upper, rori)  # 纯函数：按动态阈值与 RORI 分级判定当前告警列表。
+======================================================================
+FILE qinghe/auth.py  (223 lines)
+DOC: 青禾智灌 —— 认证模块。
+  CONST _HASH_PREFIXES = ('pbkdf2:', 'scrypt:', 'sha256:')
+  def _client_ip()  # 取用于限流的来源 IP。
+  def _login_key(username)  # 限流键：用户名 + 来源 IP。
+  def _login_locked(username)  # 该 用户名+IP 是否已被锁定。锁定窗口过期则自动重置。
+  def _record_login_fail(username)  # 记录一次登录失败（窗口内累加，窗口外重新计数）。
+  def _clear_login_fail(username)  # 登录成功后清空失败计数。
+  def reset_login_failures()  # 清空全部限流状态（测试用）。
+  def login_throttle(username)  # 该「用户名 + 来源 IP」当前是否已被限流锁定。
+  def record_login_failure(username)  # 记录一次登录失败（路由层统一入口）。
+  def clear_login_failures(username)  # 登录成功后清空该「用户名 + 来源 IP」的失败计数。
+  def register_throttle()  # 该来源 IP 在限流窗口内的注册尝试是否已超上限。
+  def record_register_attempt()  # 记录一次注册尝试（窗口内累加，窗口外重新计数）。
+  def reset_register_attempts()  # 清空注册限流状态（测试用）。
+  def is_password_hash(stored)  # 判断库中存的是否已是哈希（否则视为旧库明文密码）。
+  def verify_password(stored, password)  # 校验密码，兼容旧库明文。
+  def upgrade_plaintext_password(uid, password)  # 旧库明文密码命中后自动升级为哈希。
+  def hash_password(password)  # 生成密码哈希。
+  def issue_token(uid, days)  # 签发 7 天有效期的 HS256 JWT（payload 仅含 user_id 与 exp）。
+  def authenticate(username, password)  # 校验账号密码。
+  def require_token(f)  # 装饰器：校验 `Authorization: Bearer <jwt>`，把 user_id 作为首个参数注入。
+  def current_uid()  # 取当前会话用户 id，未登录返回 None。
+======================================================================
+FILE qinghe/autocontrol.py  (319 lines)
+DOC: 青禾智灌 —— NF7 服务端自动调控引擎（可选托管）。
+  CONST AUTO_MIN_INTERVAL_SECONDS = 60
+  CONST DEVICES = ('air_pump', 'water_pump')
+  def _ensure_schema()  # 懒建 auto_control 表（幂等，每个公开函数入口调用）。
+  def _row_value(row, key, default)  # 安全读取 sqlite3.Row 的列；缺失或 NULL 返回默认值。
+  def _to_float(value)  # 尽力转 float，失败返回 None。
+  def _normalize_switch(value)  # 把 on/off/True/False/1/0 归一成 'on' / 'off'，未知返回 None。
+  def _load_row(uid)  # 读取自动调控配置行，不存在返回 None。
+  def _load_state(uid)  # 解析 state_json，异常或空值返回空 dict。
+  def _save_state(uid, state, last_action_ts)  # 写回状态 JSON 与最近动作时间（时间戳走毫秒）。
+  def _add_log(uid, message, level)  # 写运行日志（NF2 未就绪时静默跳过，绝不向上抛）。
+  def _load_thresholds(uid)  # 读取用户阈值，缺省回落到 config.THRESH_DEFAULTS。
+  def set_enabled(uid, enabled)  # 开启 / 关闭服务端自动调控（默认关闭；关闭后 `evaluate` 立即不动作）。
+  def is_enabled(uid)  # 查询是否开启；查库无记录（从未设置）一律返回 False。
+  def status(uid)  # 返回 `{'enabled','last_action_ts','state'}`（未设置时 enabled=False）。
+  def evaluate(uid, telemetry)  # 按最新遥测评估并下发动作，返回**实际下发成功**的动作列表。
+======================================================================
+FILE qinghe/config.py  (243 lines)
+DOC: 青禾智灌 —— 全局配置与常量。
+  CONST APP_NAME = '青禾智灌智慧灌溉管理平台'
+  CONST DB_PATH = ...
+  CONST FALLBACK_SECRET_KEY = 'smart_irrigation_secret_2026'
+  CONST DEFAULT_PORT = 5000
+  CONST DB_TIMEOUT = 10
+  CONST HISTORY_KEEP_DAYS = 7
+  CONST HISTORY_DEFAULT_LIMIT = 1000
+  CONST HISTORY_MIN_LIMIT = 1
+  CONST HISTORY_MAX_LIMIT = 5000
+  CONST CSP_POLICY = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; c
+  CONST SECURITY_HEADERS = ...
+  CONST LOGIN_MAX_FAIL = 5
+  CONST LOGIN_LOCK_SECONDS = 600
+  CONST REGISTER_MAX_ATTEMPTS = 10
+  CONST MAX_CONTENT_LENGTH = ...
+  CONST MASK = '••••••••'
+  CONST ALERT_CONTENT_MAX_LEN = 500
+  CONST ALERT_LEVEL_MAX_LEN = 20
+  CONST IOT_PORT_MIN = 1
+  CONST IOT_PORT_MAX = 65535
+  CONST IOT_PORT_DEFAULT = 1883
+  CONST THRESH_DEFAULTS = {'humi_down': 40, 'humi_up': 80, 'waterlevel_down': 30, 'waterlevel_up': 150, 'manual_mode': 0}
+  CONST DEFAULT_M2M_TOPIC = '/esp32e/data'
+  CONST DEFAULT_CMD_TOPIC = '/esp32e/cmd'
+  CONST DEFAULT_WEATHER_DOMAIN = 'm767cfpjh7.re.qweatherapi.com'
+  CONST DEFAULT_AI_DOMAIN = 'https://api.deepseek.com'
+  CONST DEFAULT_AI_MODEL = 'deepseek-chat'
+  CONST AI_MSG_MAX_LEN = 2000
+  CONST TIMEOUT_PHOTON = 6
+  CONST TIMEOUT_WEBHOOK = 3
+  CONST TIMEOUT_WEATHER = 8
+  CONST TIMEOUT_AI = 20
+  CONST FARM_NAME_MIN_LEN = 1
+  CONST FARM_NAME_MAX_LEN = 20
+  CONST FARM_MAX_COUNT = 12
+  CONST FARM_AREA_MAX_M2 = 1000000.0
+  CONST FARM_POLYGON_MAX_POINTS = 200
+  CONST FARM_POLYGON_MAX_LEN = 20000
+  CONST FARM_LAT_RANGE = (-90.0, 90.0)
+  CONST FARM_LON_RANGE = (-180.0, 180.0)
+  CONST ADC_MAX = 4095.0
+  CONST WATER_FS_MM = 300.0
+  CONST W_EH = 0.35
+  CONST W_DO = 0.35
+  CONST W_WATER_SOIL = 0.3
+  CONST GAMMA = 0.5
+  CONST EH_SAFE_MV = 300.0
+  CONST EH_SPAN_MV = 450.0
+  CONST DO_SAFE_MGL = 8.0
+  CONST WATER_DEADBAND_MM = 5.0
+  CONST WATER_RISK_SPAN_MM = 100.0
+  CONST RORI_HEAVY = 70
+  CONST RORI_MODERATE = 40
+  CONST RAIN_WEIGHTS = [1.0, 0.9, 0.7, 0.5, 0.4, 0.3]
+  CONST H_ROOT = 200.0
+  CONST ALPHA_LOW = 0.95
+  CONST ALPHA_MID = 0.75
+  CONST ALPHA_HIGH = 0.45
+  CONST ALPHA_LOW_MAX = 10.0
+  CONST ALPHA_MID_MAX = 50.0
+  CONST EFF_LOWER_FLOOR = 45.0
+  CONST EFF_UPPER_RAIN = 15.0
+  CONST EFF_UPPER_BONUS = 15.0
+  CONST EFF_UPPER_CAP = 100.0
+  CONST ALERT_COOLDOWN_SECONDS = 60
+  CONST LOG_COOLDOWN_SECONDS = 30
+  CONST ALERT_KEY_PREFIX = '【青禾智灌系统】'
+  CONST HISTORY_QUEUE_MAX = 2000
+  CONST HISTORY_FLUSH_INTERVAL = 1.0
+  CONST HISTORY_FLUSH_BATCH = 200
+  def is_debug()  # 是否处于调试模式。默认 0（生产安全），本地调试需显式 FARM_DEBUG=1。
+  def trust_proxy()  # 是否信任反向代理传来的 `X-Forwarded-For`。
+  CONST _RUNTIME_SECRET_KEY = None
+  CONST _SECRET_LOCK = ...
+  def secret_key_is_configured()  # 是否显式配置了 FARM_SECRET_KEY（用于告警判定）。
+  def get_secret_key()  # 取会话 / JWT 签名密钥。
+  def reset_runtime_secret_key()  # 清空进程级随机密钥（仅供测试模拟「进程重启」）。
+  def get_db_path()  # 取数据库路径：优先环境变量 FARM_DB_PATH（运行时可覆盖，便于测试）。
+======================================================================
+FILE qinghe/db.py  (674 lines)
+DOC: 青禾智灌 —— 数据访问层。
+  def get_db()  # 新建一个 SQLite 连接（Row 工厂 + timeout，启用 WAL）。
+  def init_db(force)  # 建表 + 增量迁移 + 清理过期历史。幂等，进程内只执行一次。
+  CONST _CONFIG_MIGRATIONS = [('farm_lng', "ALTER TABLE configs ADD COLUMN farm_lng TEXT DEFAULT ''"), ('farm_lat', "ALTER TABLE configs ADD COLUMN f
+  CONST _HISTORY_MIGRATIONS = [('do_mgl', 'ALTER TABLE sensor_history ADD COLUMN do_mgl REAL'), ('eh_mv', 'ALTER TABLE sensor_history ADD COLUMN eh_mv
+  CONST FARM_IOT_COLUMNS = ('iot_host', 'iot_port', 'iot_client_id', 'iot_user', 'iot_pass', 'iot_device_id', 'iot_target_device_id', 'iot_m2m_topi
+  CONST _FARM_MIGRATIONS = [('iot_host', 'ALTER TABLE farms ADD COLUMN iot_host TEXT DEFAULT ""'), ('iot_port', 'ALTER TABLE farms ADD COLUMN iot_p
+  def init_geo_cache()  # 反查地名缓存表：同一坐标只调一次外部接口，之后全走缓存。启动时调用。
+  def create_user(username, password_hash)  # 新建用户并初始化其配置行。
+  def get_user_by_username(username)  # 按用户名取用户行（含 password 字段），不存在返回 None。
+  def get_user_by_id(uid)  # 按用户 id 取用户行，不存在返回 None。
+  def update_password(uid, password_hash)  # 更新指定用户的密码哈希。
+  def load_config(uid)  # 读取用户配置行，不存在返回 None。
+  def load_ai_config(uid)  # 只取 AI 代理需要的两列（ai_domain / ai_key）。
+  def load_weather_config(uid)  # 只取天气代理需要的四列（weather_domain / weather_key / farm_lng / farm_lat）。
+  CONST CONFIG_COLUMNS = ('farm_name', 'farm_lng', 'farm_lat', 'pump_port', 'air_pump_port', 'water_sensor_port', 'soil_sensor_port', 'weather_do
+  def save_config(uid, values)  # 按 CONFIG_COLUMNS 全量更新用户配置（values 中缺失的列写 NULL）。
+  def insert_history_rows(rows, farm_id)  # 批量写入历史采样。
+  def query_history(uid, limit, farm_id)  # 按时间倒序取最近 limit 条历史，返回 sqlite3.Row 列表（未 reverse）。
+  def load_thresholds(uid)  # 读取用户阈值设定行，不存在返回 None。
+  def save_thresholds(uid, humi_down, humi_up, wl_down, wl_up, manual)  # UPSERT 用户阈值设定与手动/自动模式。
+  def get_geo_cache(key)  # 取缓存地名，未命中返回 None。表不存在（未初始化）时也返回 None。
+  def set_geo_cache(key, name)  # 写入/覆盖缓存地名。
+  CONST DEFAULT_FARM_NAME = '默认地块'
+  CONST _FARM_FIELDS = ('id', 'user_id', 'name', 'lat', 'lon', 'area_m2', 'polygon', 'created_ts')
+  def _farm_dict(row)  # 把 farms 行转为可 JSON 序列化的 dict。
+  def count_farms(uid)  # 统计该账号的地块数量。
+  def list_farms(uid)  # 按创建顺序列出该账号所有地块（dict 列表）。
+  def get_farm(uid, farm_id)  # 按 id 取地块（仅限本人），不存在返回 None。
+  def create_farm(uid, name, lat, lon, area_m2, polygon)  # 新建地块，返回新 id。
+  def update_farm(uid, farm_id, name, lat, lon, area_m2, polygon)  # 更新地块信息，返回是否命中。
+  def delete_farm(uid, farm_id)  # 删除地块（至少保留一块的约束由调用方保证），返回是否命中。
+  def get_active_farm_id(uid)  # 读取当前生效地块 id，未设置返回 0。
+  def _mirror_to_config(conn, uid, farm)  # 把地块的名称/经纬度镜像进 configs（天气、看板、逆地理都读这几个字段）。
+  def set_active_farm(uid, farm_id)  # 切换当前地块：写 configs.active_farm_id 并镜像名称与坐标。
+  def ensure_default_farm(uid)  # 保证账号至少有一块地；返回当前生效地块 dict（必要时新建并激活）。
+  def save_active_farm_meta(uid, name, lat, lon, area_m2, polygon)  # 保存设置页里对「当前地块」的修改（名称/坐标/面积/边界）。
+  def save_farm_iot(uid, farm_id, values)  # 把物联网接入参数写到指定地块，返回是否命中。
+  def _to_positive_int(value)  # 把端口值转成正整数；非法或 <=0 一律返回 0（0 = 未设置）。
+  def load_iot_config(uid)  # 读取该账号当前生效地块的物联网接入参数。
+======================================================================
+FILE qinghe/diag.py  (234 lines)
+DOC: 青禾智灌 —— 外部接入的连通性自检。
+  CONST DETAIL_MAX_LEN = 300
+  CONST TARGETS = ('iot', 'weather', 'ai', 'webhook')
+  def _result(ok, message, detail)  # 构造统一的探测结果。
+  def _real_value(raw)  # 把配置值归一化成可用于请求的字符串；掩码占位与空白都视为「未填写」。
+  def _elapsed_ms(started)  # 把起点时间换算成毫秒耗时（取整，至少 1ms 便于显示非零）。
+  def _load(uid)  # 读取用户配置行；没有配置返回 None。
+  def test_iot(cfg)  # 探测华为云 IoTDA 的 MQTT 接入参数是否填全、主机是否可达。
+  def test_weather(cfg)  # 用当前配置真请求一次和风天气 7 日预报。
+  def test_ai(cfg)  # 用当前配置发一条最小对话请求，验证域名与 API Key。
+  def test_webhook(cfg)  # 向配置的 webhook 发一条测试消息。
+  CONST _HANDLERS = ...
+  def run_test(uid, target)  # 按目标名执行一次连通性探测。
+======================================================================
+FILE qinghe/heartbeat.py  (328 lines)
+DOC: 青禾智灌 —— NF3 设备心跳与离线判定。
+  CONST DEVICE_OFFLINE_SECONDS = 30
+  CONST WATCH_INTERVAL = 5.0
+  CONST _STATUS_LOCK = ...
+  def _ensure_schema()  # 懒建 `device_status` 表（按当前库路径幂等）。
+  def _now_ms()  # 当前毫秒时间戳。
+  def _as_int(value, default)  # 尽力转 int，失败返回默认值。
+  def _offline_seconds(offline_seconds)  # 离线阈值：调用方显式传入优先，否则用模块常量。
+  def _silent_seconds(now, last_seen)  # 静默秒数（毫秒差向上取整），避免 30.1 秒被误报成 30 秒在线。
+  def _read_row(user_id)  # 读取一行设备状态，不存在返回 None。
+  def mark_seen(uid, ts)  # 记录一次设备心跳。
+  def get_status(uid, offline_seconds)  # 查询设备在线状态。
+  def _normalize_uids(uids)  # 去重并过滤非法 uid，保持首次出现顺序。
+  def _emit_offline(uid, silent)  # 离线副作用：写 warning 日志 + 推送 device_offline 告警（受冷却去重）。
+  def sweep_offline(uids)  # 批量检查设备，把静默超时的落为离线态。
+  def _last_seen_of(user_id)  # 读最近心跳时间，读不到返回当前时间（避免负数静默秒）。
+  def _watch_loop(get_uids, emit, interval)  # 巡检线程主体：周期调用 `sweep_offline()`，把新离线设备交给 emit。
+  def start_watcher(get_uids, emit, interval)  # 启动设备离线巡检守护线程（幂等，已在跑则直接返回当前线程）。
+  def stop_watcher(timeout)  # 停止巡检线程并等待退出（幂等，未启动时安全返回）。
+======================================================================
+FILE qinghe/iot.py  (648 lines)
+DOC: 青禾智灌 —— 华为云 IoTDA(MQTT) 接入层。
+  def get_client(uid)  # 取用户的 MQTT 客户端记录（副本），不存在返回 None。
+  def is_connected(uid)  # 该用户的 MQTT 是否真正握手成功（rc==0）。
+  def set_connected(uid, connected)  # 更新连接状态标记（供 MQTT 回调线程调用）。
+  def _stop_client(uid)  # 停掉该用户的旧连接并从注册表移除。
+  def clear_clients()  # 停掉全部连接（测试/进程退出用）。
+  class HistoryWriter
+     .__init__(self, maxsize, flush_interval, batch)
+     .enqueue(self, uid, ts, water_adc, soil_adc, do_mgl, eh_mv)
+     ._drain(self)
+     .flush_once(self)
+     ._run(self)
+     .start(self)
+     .stop(self, timeout)
+  def start_history_writer()  # 启动全局历史落库线程。
+  def flush_history()  # 同步 flush 全局队列（测试用）。
+  CONST HISTORY_FIELDS = ('waterlevel', 'humidity')
+  CONST PROP_MAP = {'water_pump': 'water_pump', 'air_pump': 'air_pump'}
+  def parse_mqtt_payload(topic, content)  # 解析 MQTT 报文。
+  def extract_history_sample(values, now_ms)  # 从解析出的属性中提取历史采样行；水位与土壤不齐时返回 None。
+  def _to_float(value)  # 把上报值尽力转成 float；非法或缺失返回 None。
+  CONST _ALERT_EVAL_INTERVAL = 10.0
+  def _feed_insight(uid, values, now_ms)  # 把一次设备上报分发给新增旁路模块（心跳 / 预案上下文 / 泵时长 / 自动调控 / 告警）。
+  def ingest_telemetry(uid, values, ts, emit, writer)  # 把一帧已解析的遥测走完整链路（历史落库 + 旁路分发 + 前端事件）。
+  def handle_mqtt_message(uid, topic, content, emit, writer)  # 把 MQTT 报文拆成字段，推给前端，并把历史数据放入批量写入队列。
+  def on_mqtt_connect(client, userdata, flags, rc, properties)  # 连接回调：订阅上行 Topic 并推送在线状态。
+  def on_mqtt_disconnect(client, userdata, rc, properties, reason_code)  # 断开回调：标记离线并推送状态。
+  def on_mqtt_message(client, userdata, msg)  # 消息回调：交给 handle_mqtt_message 解析（内部非阻塞）。
+  def _safe_iot_port(raw)  # 把配置里的 iot_port 归一为合法端口，非法值回退默认并记 warning。
+  def connect_huawei_iot(uid)  # 按用户配置连上华为云 IoTDA。
+  def reconnect_async(uid)  # 在后台守护线程里重建该用户的 MQTT 连接。
+  def send_property_command(uid, props)  # 下发设备控制指令。
+======================================================================
+FILE qinghe/irrigation.py  (264 lines)
+DOC: 青禾智灌 —— 灌溉决策纯函数层（说明书 3.1~3.4）。
+  def adc_to_water_mm(water_adc)  # 水位 ADC -> 毫米（探针式，ADC 越高水越深，满量程 4095 ≈ 300mm）。
+  def adc_to_soil_pct(soil_adc)  # 土壤湿度 ADC -> 湿润度 %（电容式，ADC 越高越干）。
+  def clamp(value, low, high)  # 把 value 限制到 [low, high]。
+  def risk_eh(eh_mv)  # 3.1.1 氧化还原电位风险因子 SEh = clamp(0,1,(Ehmax-Eh)/(Ehmax-Ehmin))。
+  def risk_do(do_mgl)  # 3.1.2 根区溶解氧风险因子 SDO = clamp(0,1,(DOmax-DO)/(DOmax-DOmin))。
+  def risk_water(water_mm)  # 3.1.3 水位风险：(WaterA0-5)/100，水位 ≤5mm 死区内为 0。
+  def risk_soil(soil_pct)  # 3.1.3 土壤风险：越湿润（%RH 越高）缺氧风险越高 -> %RH/100。
+  def compute_rori(water_adc, soil_adc, do_mgl, eh_mv)  # 3.2 RORI 多维融合，返回 0~100 的风险指数。
+  def classify_rori(rori)  # 表3-1：RORI≥70 重度厌氧 / 40≤RORI<70 中度缺氧 / RORI<40 安全运行。
+  def compute_p6d(daily_precips)  # P6d = Σ(t=1..6) ω_t·P_t，时间衰减加权 6 日累计降雨（mm）。
+  def alpha_of(p6d)  # 动态降雨有效利用系数 α 分段定界：≤10 → 0.95；≤50 → 0.75；否则 0.45。
+  def compute_dynamic_threshold(humi_down, humi_up, daily_precips)  # 降雨前馈动态阈值。
+  CONST PUMP_STATE_ON = 'on'
+  CONST PUMP_STATE_OFF = 'off'
+  CONST PUMP_STATE_HOLD = 'hold'
+  CONST PUMP_STATE_OK = 'ok'
+  def decide_control(water_mm, soil_pct, rori, thresholds, state, dt)  # 自动调控策略（纯函数，无副作用）。
+======================================================================
+FILE qinghe/logbook.py  (402 lines)
+DOC: 青禾智灌 —— NF2 运行日志服务端化。
+  CONST LOG_LEVELS = ('info', 'warning', 'error')
+  CONST LOG_SOURCES = ('system', 'device', 'auto', 'manual', 'plan', 'config')
+  CONST QUEUE_MAX = 1000
+  CONST BATCH_SIZE = 20
+  CONST FLUSH_INTERVAL = 1.0
+  CONST MESSAGE_MAX_LEN = 500
+  CONST MAX_LIMIT = 1000
+  CONST _RECENT_MAX = 2000
+  CONST _DB_LOCK = ...
+  def reset_recent_logs()  # 清空重复日志冷却表（测试隔离与运行期调参后调用）。
+  def _ensure_schema()  # 懒建 `logs` 表与 `idx_logs_user_ts` 索引（按当前库路径幂等）。
+  def _now_ms()  # 当前毫秒时间戳。
+  def _as_int(value, default)  # 尽力转 int，失败返回默认值。
+  def _clamp_limit(limit, default)  # 把 limit 收敛到 [1, MAX_LIMIT]，非法值使用默认值。
+  def _normalize_level(level)  # 归一化日志级别；未知值回退为 `info`。
+  def _normalize_source(source)  # 归一化日志来源；未知值回退为 `system`。
+  def _clip_message(message)  # 归一化日志正文：去首尾空白并截断到 500 字符。
+  def _write_rows(rows)  # 把一批日志 `executemany` 落库，返回成功条数（失败不向上抛）。
+  class _LogWriter
+     .__init__(self, maxsize, flush_interval, batch)
+     .enqueue(self, item)
+     ._drain(self, limit)
+     .flush_once(self, limit)
+     .flush_all(self, timeout)
+     ._run(self)
+     .start(self)
+     .stop(self, timeout)
+  def _log_key(user_id, level, source, message)  # 重复日志的判重键：同用户 + 同级别 + 同来源 + 正文指纹。
+  def _should_log(user_id, level, source, message, cooldown)  # 是否应当放行这条日志（冷却期内重复内容返回 False）。
+  def reset_recent_logs()  # 清空重复日志冷却表（测试隔离与运行期调参后调用）。
+  def add_log(uid, message, level, source, cooldown)  # 非阻塞写入一条运行日志。
+  def flush_logs(timeout)  # 强制把队列中的日志刷入数据库（测试与进程退出时使用）。
+  def dropped_count()  # 返回因队列满被丢弃的最旧日志条数（监控与测试用）。
+  def query_logs(uid, limit, since_ts)  # 按 `ts DESC` 查询用户日志，`rid` 为 1 基序号。
+  def prune_logs(keep_days)  # 删除早于 `keep_days` 天的日志，返回删除行数（幂等）。
+======================================================================
+FILE qinghe/metrics.py  (367 lines)
+DOC: 青禾智灌 —— NF5 节水减碳看板（Metrics）。
+  CONST DEFAULT_CHANNEL_AREA_M2 = 0.5
+  CONST DEFAULT_CH4_SAVED_G_PER_HOUR = 0.8
+  CONST GWP100 = 28
+  CONST DEVICES = ('air_pump', 'water_pump')
+  CONST MAX_DAYS = 90
+  def _ensure_schema()  # 懒建 pump_runtime 表与索引（按当前库路径幂等，每个公开函数入口调用）。
+  def _env_float(name, default)  # 读取浮点环境变量，缺失或非法时返回默认值（必须 > 0）。
+  def channel_area_m2()  # 当前渠道面积（m²）：环境变量 FARM_CHANNEL_AREA_M2 覆盖，默认 0.5。
+  def ch4_saved_g_per_hour()  # 当前增氧减排系数（g/h）：环境变量 FARM_CH4_SAVED_G_PER_HOUR 覆盖，默认 0.8。
+  def _now_ms()  # 当前毫秒时间戳。
+  def _day_of(ts_ms)  # 毫秒时间戳 → 本地时区 'YYYY-MM-DD'。
+  def _day_start_ms(day)  # 本地日期 → 当日 00:00 的毫秒时间戳。
+  def _normalize_state(state)  # 把 on/off/True/False/1/0 归一成 'on' / 'off'，未知返回 None。
+  def _add_seconds(uid, device, start_ms, end_ms)  # 把一段运行时长按本地自然日切分累加进 pump_runtime（不足 1 秒的忽略）。
+  def note_pump_state(uid, device, state, ts)  # 记录一次水泵 / 气泵开关状态（状态去重累加，非法入参直接忽略）。
+  def _runtime_by_day(uid, days)  # 查询指定日期集合内各设备累计秒数：{(device, 'YYYY-MM-DD'): int}。
+  def _water_mm_by_day(uid, days, farm_id)  # 按本地自然日汇总水位抬升量（mm）：只累计正向抬升，回落视为消耗不抵扣。
+  def _trailing_days(days)  # 返回截至今天的最近 N 个本地自然日（升序 'YYYY-MM-DD'）。
+  def _clamp_days(days)  # 把 days 收敛到 1~MAX_DAYS，非法值回落到 7。
+  def _method_text(area, ch4_rate)  # 估算口径说明（必须明示「工程估算，非实测」）。
+  def daily_series(uid, days, farm_id)  # 逐日返回节水减碳指标（升序，最后一项为今天）。
+  def estimate(uid, days, farm_id)  # 汇总最近 N 天的节水减碳指标（工程估算，非实测）。
+======================================================================
+FILE qinghe/planner.py  (732 lines)
+DOC: 青禾智灌 —— NF4 AI 决策预案闭环（Human-in-the-Loop Planner）。
+  CONST PLAN_TTL_SECONDS = 600
+  CONST ALLOWED_DEVICES = ('air_pump', 'water_pump')
+  CONST ALLOWED_ACTIONS = ('on', 'off')
+  CONST AI_TIMEOUT_SECONDS = 25
+  CONST STATUS_PENDING = 'pending'
+  CONST STATUS_CONFIRMED = 'confirmed'
+  CONST STATUS_REJECTED = 'rejected'
+  CONST STATUS_EXPIRED = 'expired'
+  CONST STATUS_FAILED = 'failed'
+  CONST PLANNER_SYSTEM_PROMPT = '你是智慧灌溉系统的决策助手。只输出一个 JSON 对象，不要输出解释文字、Markdown 或代码块围栏。JSON 结构：{"reasoning": "推理过程（中文，必须含具体数值依据）", "actions": [{"device":
+  CONST _WATER_ALIASES = ('water_adc', 'waterlevel', 'waterAdc')
+  CONST _SOIL_ALIASES = ('soil_adc', 'humidity', 'soilAdc')
+  CONST _AIR_ALIASES = ('air_pump', 'airPump', 'air')
+  CONST _PUMP_ALIASES = ('water_pump', 'waterPump', 'pump')
+  def _ensure_schema()  # 懒建 plans 表与索引（幂等，每个公开函数入口调用）。
+  def _row_value(row, key, default)  # 安全读取 sqlite3.Row 的列；行缺失、列不存在或值为 NULL 时返回默认值。
+  def _to_float(value)  # 尽力转 float，失败返回 None。
+  def _first_value(snap, *keys)  # 按候选键顺序取第一个非 None 值。
+  def _normalize_switch(value)  # 把 on/off/True/False/1/0 归一成 'on' / 'off'，未知返回 None。
+  def _normalize_risk(value)  # 把模型给出的风险等级归一成 low / medium / high。
+  def _load_thresholds(uid)  # 读取用户阈值，缺省回落到 config.THRESH_DEFAULTS，返回纯 dict。
+  def _add_log(uid, message, level, source)  # 写运行日志（NF2 未就绪时静默跳过，绝不向上抛）。
+  def _push_alert(uid, level, code, content)  # 推送告警（NF1 未就绪时静默跳过，绝不向上抛）。
+  def update_telemetry(uid, **kw)  # 写入最新遥测到模块级缓存（线程安全，供 MQTT 回调线程调用）。
+  def reset_telemetry(uid)  # 清空某用户的实时遥测缓存。
+  def _forecast_precips(uid)  # 取最近 6 日降雨预报（mm 列表）；无 Key / 请求失败 / 数据异常返回 None。
+  def forecast_precips(uid)  # 公开封装：取未来 6 日报雨（mm 列表）；无 Key / 失败返回 None。
+  def build_context(uid, precips)  # 汇总感知上下文快照（遥测缓存 + 阈值 + 可选天气前馈）。
+  def _build_ai_prompt(ctx, question)  # 把上下文快照序列化进提示词，要求模型给出可执行预案。
+  def _extract_json_object(text)  # 从模型输出里抠出 JSON 对象（容忍 Markdown 代码块围栏与前后废话）。
+  def _sanitize_actions(raw_actions)  # 过滤白名单外的设备/动作，返回干净的 actions 列表（非法项直接丢弃）。
+  def _ai_plan(uid, ctx, question)  # 调用用户配置的 AI 生成预案；无 Key / 网络失败 / 解析失败均返回 None。
+  def _rule_reasoning(ctx, decision, thresholds, dt, rori)  # 拼装规则回退推理文本：必须写明 RORI 分级 / 水位滞回 / 降雨前馈的具体数值。
+  def _rule_plan(uid, ctx)  # 规则回退方案：用 irrigation.decide_control 生成 actions（离线可用）。
+  def _insert_plan(uid, ts, ctx, payload)  # 落库一条待确认预案，返回自增 plan id。
+  def propose_plan(uid, question)  # 生成一条待人工确认的决策预案。
+  def _load_plan(plan_id)  # 按 id 取预案行，不存在返回 None。
+  def _load_proposal(row)  # 解析 proposal_json，异常时返回空结构。
+  def _update_plan(plan_id, status, decided_ts, apply_result)  # 更新预案状态（可选写入下发结果 JSON）。
+  def _format_actions(actions)  # 把动作列表拼成一行可读文本（写日志用）。
+  def confirm_plan(uid, plan_id)  # 人工确认预案：校验归属 / pending 状态 / TTL 后逐条下发。
+  def reject_plan(uid, plan_id, reason)  # 人工拒绝预案：仅限本人 pending 预案，拒绝原因追加到 reasoning 末尾。
+  def list_plans(uid, limit)  # 按时间倒序列出本人预案（rid 为 1 基序号），limit clamp 到 1~100。
+======================================================================
+FILE qinghe/realtime.py  (116 lines)
+DOC: 青禾智灌 —— SocketIO 实时通道。
+  CONST PROP_MAP = ...
+  def emit_hw_data(uid, payload)  # 把一条 `hw_data` 事件推给指定用户房间（str(uid)）。
+  def _emit_device_status(uid, event)  # 把离线巡检事件包装成前端认识的 `hw_data` 载荷推给用户房间。
+  def _device_uids()  # 读取所有曾上报过心跳的 user_id，供离线巡检使用。
+  def start_device_watcher(interval)  # 启动设备离线巡检守护线程。
+  def register_events(sock)  # 把 SocketIO 事件注册到给定实例（应用工厂调用）。
+  def _register_default()  # 在包单例上注册事件（导入本模块时执行）。
+======================================================================
+FILE qinghe/simulate.py  (190 lines)
+DOC: 青禾智灌 —— 外部联调用的遥测序列生成器。
+  CONST SCENARIOS = ('normal', 'drought', 'anaerobic', 'storm')
+  CONST DEFAULT_SAMPLES = 24
+  CONST MIN_SAMPLES = 1
+  CONST MAX_SAMPLES = 240
+  CONST DEFAULT_INTERVAL_SECONDS = 60
+  CONST MIN_INTERVAL_SECONDS = 1
+  CONST MAX_INTERVAL_SECONDS = 3600
+  CONST SCENARIO_META = {'normal': {'name': '常规运行', 'desc': '水位与土壤适中、根区有氧，设备按阈值正常待机。'}, 'drought': {'name': '连续干旱', 'desc': '水位与土壤湿度持续下降，触发低水位与土
+  def _adc_water(mm)  # 毫米 → 水位 ADC（与 irrigation.adc_to_water_mm 互逆）。
+  def _adc_soil(pct)  # 土壤湿润度 % → 电容式 ADC（与 irrigation.adc_to_soil_pct 互逆）。
+  def _wave(i, samples, amp, phase)  # 一条平滑正弦波动，让曲线看着像真实测量而不是直线。
+  def clamp_samples(samples)  # 把采样条数收敛到 [MIN_SAMPLES, MAX_SAMPLES]；缺失或非数字用默认值。
+  def clamp_interval(interval)  # 把采样间隔（秒）收敛到 [MIN_INTERVAL_SECONDS, MAX_INTERVAL_SECONDS]。
+  def build_series(scenario, samples)  # 按场景生成遥测序列（列表元素为 MQTT 属性字典）。
+  def describe_scenarios()  # 返回场景清单（供外部脚本打印帮助）。
+  def run_simulation(uid, scenario, samples, interval, emit)  # 把一段模拟遥测灌进指定账号，返回本次注入的概要。
+======================================================================
+FILE qinghe/validators.py  (258 lines)
+DOC: 青禾智灌 —— 请求入参校验工具。
+  CONST FARM_ID_MIN = 1
+  CONST FARM_ID_MAX = 999999999
+  class ValidationError
+     .__init__(self, message, status)
+  def as_str(data, key, default)  # 从 JSON 字典取字符串字段。
+  def as_stripped(data, key, default)  # 取字符串字段并去掉首尾空白（登录/注册用户名的常用形态）。
+  def as_int(data, key, default)  # 取整数字段。
+  def as_float(data, key, default)  # 取浮点字段。
+  def as_bool(data, key, default)  # 取布尔字段。只接受真正的 `bool`，其他类型抛 `ValidationError`。
+  def truncated(data, key, default, max_len)  # 取字符串字段并截断到 `max_len`（告警文案等自由文本用）。
+  def get_json_object(request)  # 解析请求体并要求其是 JSON 对象。
+  def _to_strict_int(value, name)  # 把入参转成 int，bool / 空值 / 非数字字符串一律抛 `ValidationError`。
+  def parse_int_range(value, lo, hi, name)  # 把入参解析为 `[lo, hi]` 区间内的整数。
+  def parse_float_range(value, lo, hi, name)  # 把入参解析为 `[lo, hi]` 区间内的有限浮点数。
+  def parse_str_field(value, name, min_len, max_len, strip)  # 校验字符串字段并返回规整后的文本。
+  def parse_bool_strict(value, name, default)  # 严格布尔解析：只接受 true/false 与数字 0/1。
+======================================================================
+FILE qinghe/weather.py  (111 lines)
+DOC: 青禾智灌 —— 天气与逆地理模块。
+  def _pick_admin(values)  # values: 由大到小的行政区字段（可能为空）。过滤国家/空值、去重，
+  def photon_reverse(lat, lng)  # Photon(komoot, 基于 OSM) 逆地理：免 Key、返回简体、可下探 suburb/quarter(社区级)。
+  def geo_key(lat, lng)  # 逆地理缓存键：坐标保留 4 位小数。
+  def geo_fallback_text(lat, lng)  # 反查失败时的坐标兜底文案（与旧版逐字一致）。
+  def geo_lookup(lat, lng)  # 带缓存的逆地理查询。
+  def build_forecast_url(domain, lng, lat, key)  # 拼接和风天气 7 日预报 URL。
+  def fetch_forecast(domain, lng, lat, key)  # 代理请求和风天气 7 日预报。
+  def forecast_failed(payload)  # 判断 `fetch_forecast()` 的返回值是否表示失败（供路由层选状态码）。
+======================================================================
+FILE qinghe/routes/__init__.py  (30 lines)
+DOC: 青禾智灌 —— HTTP 蓝图包。
+======================================================================
+FILE qinghe/routes/advice_routes.py  (72 lines)
+DOC: 青禾智灌 —— 七日灌溉建议 HTTP 接口。
+  def api_advice_calendar()  # 返回未来 7 天的逐日灌溉建议与一句话总览。
+======================================================================
+FILE qinghe/routes/ai_routes.py  (46 lines)
+DOC: 青禾智灌 —— AI 对话 HTTP 接口。
+  CONST NO_KEY_TIP = '⚠️ 提示：未检测到 AI Key，请在【设置】中配置。'
+  def api_ai_chat()  # 把用户提问（+ 实时数据快照）转发给配置的 AI 接口。
+======================================================================
+FILE qinghe/routes/app_routes.py  (57 lines)
+DOC: 青禾智灌 —— 页面与应用端指令 HTTP 接口。
+  def route_root()  # 首页：已登录跳转控制台，未登录渲染登录页。
+  def route_index()  # 控制台页面：未登录跳回首页。
+  def route_knowledge()  # 知识库页面（灌溉科普 + 系统内核说明）：未登录跳回首页。
+  def api_app_command(uid)  # App 端下发控制指令（JWT 鉴权）。
+======================================================================
+FILE qinghe/routes/auth_routes.py  (169 lines)
+DOC: 青禾智灌 —— 认证相关 HTTP 接口。
+  def _json_body()  # 解析 JSON 对象请求体；非对象返回 (None, 400 响应)。
+  def _connect_iot_async(uid)  # 后台线程建立 MQTT 连接：华为云不可达时 connect() 最长阻塞 60s，不能占请求线程。
+  def api_register()  # 注册新账号：校验用户名/密码长度，成功后同时初始化 configs 行。
+  def api_login()  # 网页登录：限流 → 校验密码 → 写入 session。
+  def api_logout()  # 登出：清空会话并跳回首页。
+  def api_change_password()  # 修改密码：校验原密码与新密码长度，成功后需重新登录。
+  def api_app_login()  # App 登录：返回 7 天 JWT，并顺带建立该用户的 MQTT 连接。
+======================================================================
+FILE qinghe/routes/config_routes.py  (295 lines)
+DOC: 青禾智灌 —— 配置与阈值 HTTP 接口。
+  CONST _COORD_FIELDS = ...
+  CONST _WEBHOOK_URL_MAX_LEN = 500
+  def _reconnect_async(uid)  # 在后台守护线程里重建 MQTT 连接（实现已收敛到 iot.reconnect_async）。
+  def _to_int(value, default)  # 宽松转 int：接受 int/float/数字字符串，其它返回 default。
+  def _to_float(value, default)  # 宽松转 float：接受 int/float/数字字符串，空值或非法返回 default。
+  CONST _TEXT_FIELD_MAX = ...
+  CONST _COORD_FIELD_NAMES = {'farm_lat': '纬度', 'farm_lng': '经度'}
+  def _validate_text_fields(data, values)  # 校验显式提交的文本字段（类型、长度、Webhook 前缀），合法值就地写回 values。
+  def _validate_coords(data, values)  # 校验显式提交的经纬度（数字或数字字符串）；非法值 400 而不是写脏数据。
+  CONST _COORD_CLEARED = ...
+  def _explicit_coords(data)  # 取出本次**显式提交**的经纬度（用于同步到地块记录）。
+  def _explicit_iot(data, values)  # 挑出本次请求真正提交的物联网接入字段，用于同步到当前地块。
+  def api_get_config()  # 读取当前用户配置；敏感凭据不回显明文，已设置则返回掩码占位。
+  def api_save_config()  # 保存配置。
+  def api_diag(target)  # 设置页「测试连接」：对指定外部接入做一次只读连通性探测。
+  def api_get_thresh()  # 读取当前用户的阈值与自动/手动模式设定。
+  def api_save_thresh()  # 保存阈值与自动/手动模式。
+======================================================================
+FILE qinghe/routes/data_routes.py  (117 lines)
+DOC: 青禾智灌 —— 数据类 HTTP 接口。
+  def _parse_limit(raw, default)  # 解析并 clamp 历史查询 limit；非法值回退默认值。
+  def api_history()  # 取当前用户最近的传感器历史（按时间升序返回）。
+  def api_forecast()  # 降雨预报代理：从配置读取和风天气域名与 Key，转发 7 日预报，避免前端跨域。
+  def api_reverse_geocode()  # 逆地理编码：返回具体位置（市·区·街道·社区，简体）。
+  def api_notify_alert()  # 前端检测到设备告警后调用，转发到用户配置的 webhook。
+======================================================================
+FILE qinghe/routes/export_routes.py  (198 lines)
+DOC: 青禾智灌 —— NF6 数据导出（CSV 下载）。
+  CONST BOM = '\ufeff'
+  CONST MAX_EXPORT_ROWS = 50000
+  CONST DEFAULT_EXPORT_ROWS = ...
+  CONST HISTORY_HEADER = ['时间', '时间戳', '水位ADC', '土壤ADC', '溶解氧mg/L', '氧化还原电位mV']
+  CONST ALERTS_HEADER = ['时间', '时间戳', '级别', '类型', '内容', '已确认']
+  def _current_uid()  # 取当前登录用户 id；未登录返回 None。
+  def _unauthorized()  # 统一的未登录响应。
+  def _parse_int(value, default, minimum, maximum)  # 把查询参数解析成区间内整数；非法返回 None。
+  def _parse_limit(raw, default)  # 解析导出条数：缺省用默认值，超过 `MAX_EXPORT_ROWS` 按上限截断，非法返回 None。
+  def _fmt_ts(ts)  # 毫秒时间戳 → 本地时间字符串（秒级，导出可读性优先）。
+  def _table_columns(conn, table)  # 读取表字段名集合；表不存在返回空集合。
+  def _build_csv(header, rows)  # 把表头与数据行写成带 BOM 的 CSV 文本。
+  def _csv_response(text, filename)  # 构造 CSV 下载响应（带 Content-Disposition 文件名）。
+  def export_history_csv()  # 导出传感器历史为 CSV（按 ts 倒序，缺列留空）。
+  def export_alerts_csv()  # 导出告警记录为 CSV（按 ts 倒序；告警表未建表时只返回表头）。
+======================================================================
+FILE qinghe/routes/farm_routes.py  (290 lines)
+DOC: 青禾智灌 —— 多农场（地块）HTTP 接口。
+  def _current_uid()  # 取当前会话用户 id，未登录返回 None。
+  def _fail(message, status)  # 统一错误响应。
+  def _json_body()  # 解析 JSON 对象请求体。
+  def _farm_id(data)  # 取并校验 farm_id：接受数字或数字字符串，必须在安全区间内。
+  def _validate_name(data)  # 校验地块名称：1–20 字符。
+  def _validate_pair(lat, lon)  # 校验经纬度范围，返回规整后的 (lat, lon) 或 (None, None)。
+  def _validate_area(data)  # 校验地块面积（平方米），缺省 0。
+  def _normalize_polygon(value)  # 把前端传来的边界点序列规整成 JSON 字符串。
+  def _payload(farm)  # 地块 dict 加上是否当前生效的标记。
+  def api_list_farms()  # 列出本人所有地块与当前生效地块 id。
+  def api_create_farm()  # 新建地块；第一条地块自动生效。
+  def api_switch_farm()  # 切换当前地块：同步镜像名称与坐标，并清空上一块地的实时遥测缓存。
+  def api_update_farm()  # 更新地块信息（名称 / 坐标 / 面积 / 圈地边界）。
+  def api_delete_farm()  # 删除地块；最后一块不允许删。
+======================================================================
+FILE qinghe/routes/insight_routes.py  (192 lines)
+DOC: 青禾智灌 —— NF4 / NF5 的 HTTP 接口（决策预案 + 节水减碳看板）。
+  CONST DEFAULT_PLAN_LIMIT = 20
+  CONST MAX_PLAN_LIMIT = 100
+  CONST DEFAULT_METRIC_DAYS = 7
+  CONST MAX_METRIC_DAYS = 90
+  def _current_uid()  # 取当前登录用户 id；未登录返回 None。
+  def _unauthorized()  # 统一的未登录响应。
+  def _json_body()  # 安全读取 JSON 请求体，非法 / 为空时返回空 dict。
+  def _parse_int(value, default, minimum, maximum)  # 把入参解析成区间内的整数；非法返回 None（便于调用方返回 4xx）。
+  def plan_propose()  # 生成一条待人工确认的决策预案（无 AI Key 时自动走规则回退）。
+  def plan_confirm()  # 人工确认预案并逐条下发（校验归属、pending 状态与 600 秒 TTL）。
+  def plan_reject()  # 人工拒绝一条预案（可附拒绝原因）。
+  def plan_list()  # 按时间倒序列出本人预案（`?limit=20`，上限 100）。
+  def metrics_overview()  # 节水减碳估算：返回汇总口径 + 逐日序列（工程估算，非实测）。
+  def auto_control_status()  # 查询服务端自动调控开关与最近一次动作。
+  def auto_control_toggle()  # 开启 / 关闭服务端自动调控（body `{'enabled': bool}`）。
+======================================================================
+FILE qinghe/routes/monitor_routes.py  (217 lines)
+DOC: 青禾智灌 —— NF1 / NF2 / NF3 的 HTTP 接口（告警中心 + 运行日志 + 设备状态）。
+  CONST DEFAULT_ALERT_LIMIT = 100
+  CONST MAX_ALERT_LIMIT = 500
+  CONST DEFAULT_LOG_LIMIT = 200
+  CONST MAX_LOG_LIMIT = 1000
+  def _current_uid()  # 取当前登录用户 id；未登录返回 None。
+  def _unauthorized()  # 统一的未登录响应。
+  def _json_body()  # 安全读取 JSON 请求体，非法 / 为空时返回空 dict。
+  def _parse_int(value, default, minimum, maximum)  # 把入参解析成区间内的整数；非法返回 None（便于调用方返回 4xx）。
+  def list_alerts()  # 返回当前用户最近的告警，按时间倒序。
+  def ack_alert()  # 把一条告警标记为已确认（只能确认自己的告警）。
+  def ack_all_alerts()  # 一键确认该用户的全部未确认告警（可按类型码过滤）。
+  def list_logs()  # 返回当前用户最近的运行日志，按时间倒序。
+  def device_status()  # 返回设备在线状态。
+  def latest_telemetry()  # 返回当前地块最近一次遥测快照（页面刷新后看板据此恢复读数）。
