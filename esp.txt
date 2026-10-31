@@ -1,0 +1,275 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+// WiFi 热点（手机开的热点，方便现场调试）
+const char* SSID     = "YOUR_WIFI_SSID";
+const char* PASSWORD = "YOUR_WIFI_PASSWORD";
+
+// 华为云 IoTDA 接入参数（ESP32-E 这台设备）
+const char* MQTT_SERVER = "xxxxxxxxxx.st1.iotda-device.cn-north-4.myhuaweicloud.com";
+const int   MQTT_PORT   = 1883;
+
+const char* DEVICE_ID   = "YOUR_DEVICE_ID";
+const char* CLIENT_ID   = "YOUR_DEVICE_ID_0_0_2026071020";
+const char* MQTT_USER   = "YOUR_DEVICE_ID";
+const char* MQTT_PASS   = "YOUR_DEVICE_SECRET";
+
+// 华为云约定的几个 Topic
+const char* TOPIC_REPORT       = "$oc/devices/YOUR_DEVICE_ID/sys/properties/report";
+const char* TOPIC_SYS_COMMAND  = "$oc/devices/YOUR_DEVICE_ID/sys/commands/#";
+const char* TOPIC_USER_COMMAND = "$oc/devices/YOUR_DEVICE_ID/user/command";
+// 物模型属性设置（property set）：云端向 air_pump/water_pump 属性下发 on/off
+const char* TOPIC_PROP_SET     = "$oc/devices/YOUR_DEVICE_ID/sys/properties/set/#";
+const char* TOPIC_PROP_SET_RESP_PREFIX = "$oc/devices/YOUR_DEVICE_ID/sys/properties/set/response/";
+// M2M 消息：把数据发到这个自定义 Topic，靠平台的数据转发规则再推到 /esp32e/data 供网页端读
+const char* TOPIC_M2M_SOURCE   = "/esp32e/source";
+// 命令接收 Topic（非 $oc 自定义 Topic，与 /esp32e/data 同类合法格式）：
+// client 端发布命令 → 华为云数据转发规则转发到本设备 → 本设备订阅此 Topic 执行
+const char* TOPIC_CMD_RECV     = "/esp32e/cmd";
+
+// 引脚分配
+const int WATER_PUMP_PIN_A = D7; // 水泵控制脚 A
+const int WATER_PUMP_PIN_B = D9; // 水泵控制脚 B（与 A 组合驱动）
+const int AIR_PUMP_PIN     = D5; // 气泵（PWM 调气量）
+const int WATER_SENSOR_PIN = A0; // 水位
+const int SOIL_SENSOR_PIN  = A2; // 土壤湿度
+const int DO_SENSOR_PIN    = A4; // 根区溶解氧（DO，模拟输出）
+const int EH_SENSOR_PIN    = A6; // 根区氧化还原电位（Eh，模拟输出）
+
+// DO / Eh 传感器量程换算参数（按实际探头标定曲线调整）
+// DO 探头：模拟输出 0~3.3V 对应 0~20.0 mg/L
+const float DO_ADC_MAX  = 4095.0;
+const float DO_FS_MGL   = 20.0;
+// Eh 探头：模拟输出 0~3.3V 对应 -150~300 mV（说明书 3.1.1 设定范围）
+const float EH_ADC_MAX  = 4095.0;
+const float EH_MIN_MV   = -150.0;
+const float EH_MAX_MV   = 300.0;
+
+// 水泵双端口电平组合（按实际继电器/驱动接线修改）：
+// 开泵可能是一高一低 / 同时高 / 同时低，改下面四行即可
+#define PUMP_ON_A  HIGH   // 开泵时 D7 电平
+#define PUMP_ON_B  LOW    // 开泵时 D9 电平
+#define PUMP_OFF_A LOW    // 关泵时 D7 电平
+#define PUMP_OFF_B LOW    // 关泵时 D9 电平
+
+// 气泵 PWM 配置
+#define AIR_PWM_CH    0             // LEDC 通道
+#define AIR_PWM_FREQ  5000          // 5 kHz
+#define AIR_PWM_RES   8             // 8 位分辨率（0~255）
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+unsigned long lastReportTime = 0;
+
+// 泵状态（供上报）："on" / "off"（匹配华为云物模型 string 类型）
+String waterPumpState = "off";
+String airPumpState = "off";
+
+// 水泵开关：按 PUMP_ON/OFF_* 宏设置 D7/D9 电平
+void setWaterPump(bool on) {
+  waterPumpState = on ? "on" : "off";
+  digitalWrite(WATER_PUMP_PIN_A, on ? PUMP_ON_A : PUMP_OFF_A);
+  digitalWrite(WATER_PUMP_PIN_B, on ? PUMP_ON_B : PUMP_OFF_B);
+  Serial.println("water_pump -> " + String(on ? "ON" : "OFF")
+                 + " (D7:" + String(on ? PUMP_ON_A : PUMP_OFF_A)
+                 + ", D9:" + String(on ? PUMP_ON_B : PUMP_OFF_B) + ")");
+}
+
+// 气泵 PWM 加气量：level 0~255
+void setAirPump(int level) {
+  level = constrain(level, 0, 255);
+  airPumpState = (level > 0) ? "on" : "off";
+  ledcWrite(AIR_PWM_CH, level);
+  Serial.println("air_pump -> PWM " + String(level) + " / 255");
+}
+
+// 根区溶解氧含量采集：模拟量 -> mg/L
+float readDO() {
+  int adc = analogRead(DO_SENSOR_PIN);
+  float doMgl = (adc / DO_ADC_MAX) * DO_FS_MGL;
+  return constrain(doMgl, 0.0, DO_FS_MGL);
+}
+
+// 根区氧化还原电位采集：模拟量 -> mV
+float readEh() {
+  int adc = analogRead(EH_SENSOR_PIN);
+  float ehMv = EH_MIN_MV + (adc / EH_ADC_MAX) * (EH_MAX_MV - EH_MIN_MV);
+  return constrain(ehMv, EH_MIN_MV, EH_MAX_MV);
+}
+
+// 把当前传感器 + 泵状态发到 M2M 自定义 Topic，触发转发规则推到 /esp32e/data 供网页端读。
+// 指令执行后立即调一次，让泵状态即时到网页（不必等 3 秒周期上报）。
+void publishPumpStatus() {
+  String m2m = "{\"waterlevel\":" + String(analogRead(WATER_SENSOR_PIN))
+               + ",\"humidity\":" + String(analogRead(SOIL_SENSOR_PIN))
+               + ",\"do\":" + String(readDO(), 1)
+               + ",\"eh\":" + String(readEh(), 0)
+               + ",\"water_pump\":\"" + waterPumpState
+               + "\",\"air_pump\":\"" + airPumpState + "\"}";
+  client.publish(TOPIC_M2M_SOURCE, m2m.c_str());
+}
+
+// 执行指令：网页端统一下发 on/off
+//  water_pump -> on/off（D7/D9 双端口）
+//  air_pump   -> on/off（D5 PWM，on=满档 255）
+void executeCommand(String device, String action) {
+  bool isTurnOn = action.equalsIgnoreCase("on") || action.equalsIgnoreCase("1");
+  bool changed = false;
+
+  if (device.equalsIgnoreCase("water_pump") || device.equalsIgnoreCase("SB")) {
+    setWaterPump(isTurnOn);
+    changed = true;
+  }
+  else if (device.equalsIgnoreCase("air_pump") || device.equalsIgnoreCase("QB")) {
+    setAirPump(isTurnOn ? 255 : 0);
+    changed = true;
+  }
+  // 指令执行后立即回发最新泵状态，让网页即时看到 on/off
+  if (changed) publishPumpStatus();
+}
+
+// 裁剪值：去掉前导冒号/空格/引号，截断到值结束
+String trimValue(String s) {
+  while (s.length() > 0 && (s[0] == ':' || s[0] == ' ' || s[0] == '"')) s = s.substring(1);
+  int i = 0;
+  while (i < s.length() && s[i] != '"' && s[i] != ',' && s[i] != '}' && s[i] != ']') i++;
+  return s.substring(0, i);
+}
+
+// 从报文里取 JSON 键值（如 "air_pump":"on"），返回 on/off 或空串
+String propValue(String msg, String key) {
+  String k = "\"" + key + "\"";
+  int idx = msg.indexOf(k);
+  if (idx < 0) return "";
+  String rest = msg.substring(idx + k.length());
+  rest.trim();
+  if (rest.length() == 0 || rest[0] != ':') return "";
+  // 跳过冒号、空格、引号后取值，截断到值结束
+  String v = trimValue(rest);
+  return v;
+}
+
+// MQTT 回调：解析华为云属性设置以及网页端发来的控制命令
+void callback(char* topic, byte* payload, unsigned int length) {
+  String msg = "";
+  for (unsigned int i = 0; i < length; i++) {
+    msg += (char)payload[i];
+  }
+  Serial.println("\n收到指令 [" + String(topic) + "]: " + msg);
+
+  String t = String(topic);
+
+  // 物模型属性设置：$oc/devices/.../sys/properties/set/request_id=xxx
+  if (t.indexOf("sys/properties/set") >= 0) {
+    String air = propValue(msg, "air_pump");
+    String water = propValue(msg, "water_pump");
+    if (air.length() > 0) {
+      setAirPump(air.equalsIgnoreCase("on") ? 255 : 0);
+      Serial.println("属性设置 air_pump -> " + air);
+    }
+    if (water.length() > 0) {
+      setWaterPump(water.equalsIgnoreCase("on"));
+      Serial.println("属性设置 water_pump -> " + water);
+    }
+    // 应答属性设置（可选，华为云不强制，但建议回）
+    int rid = t.indexOf("request_id=");
+    if (rid >= 0) {
+      String respTopic = String(TOPIC_PROP_SET_RESP_PREFIX) + t.substring(rid + 11);
+      String resp = "{\"result_code\":0,\"response_name\":\"SUCCESS\",\"paras\":{}}";
+      client.publish(respTopic.c_str(), resp.c_str());
+    }
+    return;
+  }
+
+  // 兼容旧的 user/command 自定义指令：{"device":"water_pump","action":"on"}
+  // 以及经数据转发规则到达的自定义 Topic /esp32e/cmd 命令：{"device":"water_pump","action":"on"}
+  String device = "", action = "";
+  int di = msg.indexOf("\"device\"");
+  int ai = msg.indexOf("\"action\"");
+  if (di >= 0) device = trimValue(msg.substring(di + 8));   // 跳过 "device"
+  if (ai >= 0) action = trimValue(msg.substring(ai + 9));   // 跳过 "action"
+
+  executeCommand(device, action);
+}
+
+void connectWiFi() {
+  Serial.print("连接热点");
+  WiFi.begin(SSID, PASSWORD);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println(" WiFi 已连接");
+}
+
+void reconnectMQTT() {
+  while (!client.connected()) {
+    Serial.print("连接华为云");
+    if (client.connect(CLIENT_ID, MQTT_USER, MQTT_PASS)) {
+      Serial.println(" 已接入");
+      client.subscribe(TOPIC_SYS_COMMAND);
+      client.subscribe(TOPIC_USER_COMMAND);
+      client.subscribe(TOPIC_PROP_SET);
+      client.subscribe(TOPIC_CMD_RECV);
+    } else {
+      Serial.print(" 失败, rc=");
+      Serial.println(client.state());
+      delay(5000);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(WATER_PUMP_PIN_A, OUTPUT);
+  pinMode(WATER_PUMP_PIN_B, OUTPUT);
+  setWaterPump(false);   // 初始关泵（D7/D9 按 OFF 电平组合）
+
+  pinMode(AIR_PUMP_PIN, OUTPUT);
+  ledcSetup(AIR_PWM_CH, AIR_PWM_FREQ, AIR_PWM_RES);
+  ledcAttachPin(AIR_PUMP_PIN, AIR_PWM_CH);
+  setAirPump(0);         // 初始气泵停
+
+  pinMode(WATER_SENSOR_PIN, INPUT);
+  pinMode(SOIL_SENSOR_PIN, INPUT);
+  pinMode(DO_SENSOR_PIN, INPUT);
+  pinMode(EH_SENSOR_PIN, INPUT);
+
+  connectWiFi();
+  client.setServer(MQTT_SERVER, MQTT_PORT);
+  client.setCallback(callback);
+}
+
+void loop() {
+  if (WiFi.status() != WL_CONNECTED) connectWiFi();
+  if (!client.connected()) reconnectMQTT();
+  client.loop();
+
+  // 每 3 秒上报一次传感器读数
+  if (millis() - lastReportTime > 3000) {
+    lastReportTime = millis();
+
+    int waterlevel = analogRead(WATER_SENSOR_PIN);
+    int humidity   = analogRead(SOIL_SENSOR_PIN);
+    float doMgl    = readDO();
+    float ehMv     = readEh();
+
+    // 上报格式按华为云物模型来：service_id 用 "esp"，包含传感器与泵状态（string）
+    String payload = "{\"services\":[{\"service_id\":\"esp\",\"properties\":{\"waterlevel\":"
+                     + String(waterlevel) + ",\"humidity\":" + String(humidity)
+                     + ",\"do\":" + String(doMgl, 1)
+                     + ",\"eh\":" + String(ehMv, 0)
+                     + ",\"water_pump\":\"" + waterPumpState
+                     + "\",\"air_pump\":\"" + airPumpState + "\"}}]}";
+
+    client.publish(TOPIC_REPORT, payload.c_str());
+    Serial.println("上报 -> 水位: " + String(waterlevel) + " | 湿度: " + String(humidity)
+                   + " | DO: " + String(doMgl, 1) + "mg/L | Eh: " + String(ehMv, 0) + "mV"
+                   + " | 水泵: " + String(waterPumpState) + " | 气泵: " + String(airPumpState));
+
+    // 同一份数据也发到自定义 Topic，触发转发规则推到 /esp32e/data，带泵状态供网页端显示
+    publishPumpStatus();
+  }
+}
